@@ -10,24 +10,15 @@ start_llvm:
 	@cd llvm/build; cmake ..; make -j8; make;
 
 run:
-	@rm -rf test/*.bc
-	@rm -rf test/*.ll
-	@rm -rf test/*.o
+	@rm -rf test/*.bc*
+	@rm -rf test/*.ll*
+	@rm -rf test/*.o*
 
 	@echo "##############"
 	@echo "TEST 1:"
 	@echo "##############"
 
 	@cd test/; clang++ -O0 -w -c -emit-llvm test1.cpp -o result1.bc; opt -mem2reg < result1.bc | llvm-dis > result1.ll; clang++ -O0 -w -c -emit-llvm -Xclang -load -Xclang ../llvm/build/lib/MonotonicLoopDetection.so result1.ll
-
-#	@echo "##############"
-#	@echo "TEST 2:"
-#	@echo "##############"
-
-
-#	@clang++ -O0 -w -c -emit-llvm test/test2.cpp -o test/result2.bc
-#	@opt -mem2reg < test/result2.bc | llvm-dis > test/result2.ll
-#	@clang++ -O0 -w -c -emit-llvm -Xclang -load -Xclang llvm/build/lib/MonotonicLoopDetection.so test/result2.ll
 
 
 clean:

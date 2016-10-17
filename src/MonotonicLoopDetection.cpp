@@ -17,51 +17,57 @@
 
 namespace{
 
+
+	struct Node
+	{
+		llvm::Instruction* I;
+		Node* father;
+		std::vector<Node*> son;
+		Node(): I(NULL), father(NULL){}
+	};
+
+	bool search(Node* n, llvm::Instruction* fI)
+	{
+		bool ret = true;
+		if(fI==n->I)
+		{
+			return true;
+		}
+		else if(n->son.size()==0)
+		{
+			for(unsigned int i=0; i<n->I->getNumOperands(); i++)
+			{
+				if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
+				else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(n->I->getOperand(i)))
+				{
+					Node* sN = new Node();
+					sN->father = n;
+					sN->I = sI;
+					n->son.push_back(sN);
+				}
+			}
+		}
+		for(s : n->son)
+		{
+			if((n->father!=NULL)&&(s->I == n->father->I))
+			{
+				std::cerr << "ALERT: Circular reference" << std::endl;
+				return true;
+			}
+			else if(llvm::dyn_cast<llvm::CallInst>(s->I)) return false;
+			else ret = ret && search(s,fI);
+		}
+
+		return ret;
+	}
+
+
 	struct MLD: llvm::LoopPass
 	{
 		static char ID;
 
 		MLD(): llvm::LoopPass(ID)
 		{}
-
-		bool uses(llvm::Instruction* phi, llvm::Instruction* I)
-		{
-			bool r = true;
-//			std::cerr << I->getName().str() << std::endl;
-			if(phi==I) return true;
-			for(unsigned int i=0; i<I->getNumOperands(); i++)
-			{
-				if(llvm::dyn_cast<llvm::ConstantInt>(I->getOperand(i))) continue;
-				else if(llvm::dyn_cast<llvm::Instruction>(I->getOperand(i))) r = r && uses(phi,llvm::dyn_cast<llvm::Instruction>(I->getOperand(i)));
-				else return false;
-			}
-			return r;
-		}
-
-/*
-		bool isAtLoop(std::vector<llvm::BasicBlock *> vec, llvm::Value* v)
-		{
-			for(llvm::BasicBlock* bb : vec){
-				for(llvm::Instruction& I : *bb){
-					llvm::Value* lhs = &I;
-					if (v==lhs)
-					{
-						I.dump();
-						bool r = true;
-						if(!(I.getOpcode()==llvm::Instruction::PHI)){
-							for(unsigned int i=0; i<I.getNumOperands(); i++)
-							{
-								if(!llvm::dyn_cast<llvm::ConstantInt>(I.getOperand(i))) r = r && isAtLoop(vec,I.getOperand(i));
-							}
-						}
-
-						return r;
-					}
-				}
-			}
-			return false;
-		}
-*/
 
 		llvm::Instruction* getPhi(llvm::BasicBlock* bb)
 		{
@@ -115,8 +121,7 @@ namespace{
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
-			//show loop
-			L->dump();
+			std::cerr << std::endl << "#-#-#-#-#-#-#-#-#-#" << std::endl << std::endl;
 
 			//get the begin and end of loop
 			std::pair<llvm::Value*, llvm::Value*> loopranges = getRanges(L->getHeader());
@@ -127,7 +132,6 @@ namespace{
 				return false;
 			}
 
-
 			bool ismonotonic = true;
 
 			std::vector<llvm::BasicBlock *> v = L->getBlocks();
@@ -137,11 +141,16 @@ namespace{
 				{
 					if (auto* op = llvm::dyn_cast<llvm::GetElementPtrInst>(&I))
 					{
+						op->dump();
 						llvm::Value* arr = op->getPointerOperand();
 						llvm::Value* index = op->getOperand(op->getNumOperands()-1);
-						if(!uses(phi,llvm::dyn_cast<llvm::Instruction>(index)))
+						llvm::Instruction* Iroot = llvm::dyn_cast<llvm::Instruction>(index);
+						Node* n = new Node();
+						n->father = NULL;
+						n->I = Iroot;
+						if(!search(n,phi))
 						{
-							std::cerr << "Index request uses non loop variable: ";
+							std::cerr << "ERROR: Index request uses non loop variable: ";
 							I.dump();
 							ismonotonic = false;
 						}
