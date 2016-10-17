@@ -15,6 +15,8 @@
 #include <vector>
 #include <utility>
 
+#include <llvm/IR/Argument.h>
+
 namespace{
 
 
@@ -37,7 +39,9 @@ namespace{
 		{
 			for(unsigned int i=0; i<n->I->getNumOperands(); i++)
 			{
-				if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
+				if(llvm::dyn_cast<llvm::Argument>(n->I->getOperand(i))) return false;
+				else if(llvm::dyn_cast<llvm::CallInst>(n->I->getOperand(i))) return false;
+				else if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
 				else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(n->I->getOperand(i)))
 				{
 					Node* sN = new Node();
@@ -54,7 +58,6 @@ namespace{
 				std::cerr << "ALERT: Circular reference" << std::endl;
 				return true;
 			}
-			else if(llvm::dyn_cast<llvm::CallInst>(s->I)) return false;
 			else ret = ret && search(s,fI);
 		}
 
@@ -121,7 +124,7 @@ namespace{
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
-			std::cerr << std::endl << "#-#-#-#-#-#-#-#-#-#" << std::endl << std::endl;
+			std::cerr << std::endl << "#--------------#" << std::endl << std::endl;
 
 			//get the begin and end of loop
 			std::pair<llvm::Value*, llvm::Value*> loopranges = getRanges(L->getHeader());
@@ -150,8 +153,7 @@ namespace{
 						n->I = Iroot;
 						if(!search(n,phi))
 						{
-							std::cerr << "ERROR: Index request uses non loop variable: ";
-							I.dump();
+							std::cerr << "ERROR: Index request uses non loop variable: " << std::endl;
 							ismonotonic = false;
 						}
 					}
