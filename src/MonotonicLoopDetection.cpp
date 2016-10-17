@@ -26,14 +26,14 @@ namespace{
 
 		bool uses(llvm::Instruction* phi, llvm::Instruction* I)
 		{
-			bool r = false;
-			if(I==phi) return true;
-			else{
-				for(unsigned int i=0; i<I->getNumOperands(); i++)
-				{
-					if(llvm::dyn_cast<llvm::ConstantInt>(I->getOperand(i))) return true;
-					r = r || uses(phi,llvm::dyn_cast<llvm::Instruction>(I->getOperand(i)));
-				}
+			bool r = true;
+//			std::cerr << I->getName().str() << std::endl;
+			if(phi==I) return true;
+			for(unsigned int i=0; i<I->getNumOperands(); i++)
+			{
+				if(llvm::dyn_cast<llvm::ConstantInt>(I->getOperand(i))) continue;
+				else if(llvm::dyn_cast<llvm::Instruction>(I->getOperand(i))) r = r && uses(phi,llvm::dyn_cast<llvm::Instruction>(I->getOperand(i)));
+				else return false;
 			}
 			return r;
 		}
@@ -63,13 +63,24 @@ namespace{
 		}
 */
 
-		std::vector<llvm::Instruction*> getPhi(llvm::BasicBlock* bb)
+		llvm::Instruction* getPhi(llvm::BasicBlock* bb)
 		{
-			std::vector<llvm::Instruction*> phi;
+			std::vector<llvm::Instruction*> phivec;
 			for(llvm::Instruction& I : *bb){
-				if(I.getOpcode()==llvm::Instruction::PHI) phi.push_back(&I);
+				if(I.getOpcode()==llvm::Instruction::PHI) phivec.push_back(&I);
 			}
-			return phi;
+
+			for(llvm::Instruction& I : *bb){
+				if(llvm::dyn_cast<llvm::ICmpInst>(&I))
+				{
+					for(phi : phivec)
+					{
+						if(phi==I.getOperand(0)) return phi;
+					}
+				}
+			}
+
+			return NULL;
 		}
 
 
@@ -104,12 +115,18 @@ namespace{
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
+			//show loop
 			L->dump();
 
+			//get the begin and end of loop
 			std::pair<llvm::Value*, llvm::Value*> loopranges = getRanges(L->getHeader());
-			std::vector<llvm::Instruction*> phi = getPhi(L->getHeader());
+			llvm::Instruction* phi = getPhi(L->getHeader());
 
-//			std::cerr << llvm::dyn_cast<llvm::PHINode>(phi)->getIncomingBlock(1)->getName().str() << std::endl;
+			if(phi==NULL){
+				std::cerr << "ERROR: Could not get loop phi instruction" << std::endl;
+				return false;
+			}
+
 
 			bool ismonotonic = true;
 
@@ -122,16 +139,12 @@ namespace{
 					{
 						llvm::Value* arr = op->getPointerOperand();
 						llvm::Value* index = op->getOperand(op->getNumOperands()-1);
-						bool usesphi = false;
-						for(p:phi)
+						if(!uses(phi,llvm::dyn_cast<llvm::Instruction>(index)))
 						{
-							if(uses(p,llvm::dyn_cast<llvm::Instruction>(index)))
-							{
-								usesphi = true;
-//								std::cerr << "Index using loop ranges of:  %" << arr->getName().str() << std::endl;
-							}
+							std::cerr << "Index request uses non loop variable: ";
+							I.dump();
+							ismonotonic = false;
 						}
-						ismonotonic = usesphi;;
 					}
 				}
 			}

@@ -18,14 +18,14 @@ run:
 	@opt -mem2reg < test/result1.bc | llvm-dis > test/result1.ll
 	@clang++ -O0 -w -c -emit-llvm -Xclang -load -Xclang llvm/build/lib/MonotonicLoopDetection.so test/result1.ll
 
-	@echo "##############"
-	@echo "TEST 2:"
-	@echo "##############"
+#	@echo "##############"
+#	@echo "TEST 2:"
+#	@echo "##############"
 
 
-	@clang++ -O0 -w -c -emit-llvm test/test2.cpp -o test/result2.bc
-	@opt -mem2reg < test/result2.bc | llvm-dis > test/result2.ll
-	@clang++ -O0 -w -c -emit-llvm -Xclang -load -Xclang llvm/build/lib/MonotonicLoopDetection.so test/result2.ll
+#	@clang++ -O0 -w -c -emit-llvm test/test2.cpp -o test/result2.bc
+#	@opt -mem2reg < test/result2.bc | llvm-dis > test/result2.ll
+#	@clang++ -O0 -w -c -emit-llvm -Xclang -load -Xclang llvm/build/lib/MonotonicLoopDetection.so test/result2.ll
 
 
 clean:
