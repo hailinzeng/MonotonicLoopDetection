@@ -49,7 +49,7 @@ int main(int argc, char** argv)
 		e[argc] = m2 + 1;
 	}
 
-	//safe...
+	//safe
 	for (int l = 1; ; l++)
 	{
 		f[l] = l + 1;

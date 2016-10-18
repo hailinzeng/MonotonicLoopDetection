@@ -80,27 +80,7 @@ namespace{
 		MLD(): llvm::LoopPass(ID)
 		{}
 
-		llvm::Instruction* getPhi(llvm::BasicBlock* bb)
-		{
-			std::vector<llvm::Instruction*> phivec;
-			for(llvm::Instruction& I : *bb){
-				if(I.getOpcode()==llvm::Instruction::PHI) phivec.push_back(&I);
-			}
-
-			for(llvm::Instruction& I : *bb){
-				if(llvm::dyn_cast<llvm::ICmpInst>(&I))
-				{
-					for(phi : phivec)
-					{
-						if(phi==I.getOperand(0)) return phi;
-					}
-				}
-			}
-
-			return NULL;
-		}
-
-
+/*
 		std::pair<llvm::Value*,llvm::Value*> getRanges(llvm::BasicBlock* bb)
 		{
 			llvm::Instruction* condition = NULL;
@@ -108,40 +88,42 @@ namespace{
 
 			for(llvm::Instruction& I : *bb){
 				if(llvm::dyn_cast<llvm::ICmpInst>(&I)) condition = &I;
-				else if(I.getOpcode()==llvm::Instruction::PHI) phi = &I;
+				else if(I.getOpcode()==llvm::Instruction::PHI){
+					phi = &I;
+				}
 			}
-/*
-			if (llvm::ConstantInt* CI = llvm::dyn_cast<llvm::ConstantInt>(phi->getOperand(0)))
-			{
-				std::cerr << "From: " << CI->getSExtValue() << std::endl;
-			}
-
-			if (llvm::ConstantInt* CI = llvm::dyn_cast<llvm::ConstantInt>(condition->getOperand(1)))
-			{
-				std::cerr << "To: " << CI->getSExtValue() << std::endl;
-			}
-*/
 
 			std::pair<llvm::Value*,llvm::Value*> p;
 			p.first = phi->getOperand(0);
 			p.second = phi->getOperand(1);
-
 			return p;
 		}
-
+*/
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
 			std::cerr << std::endl << "#--------------#" << std::endl << std::endl;
 
-			//get the begin and end of loop
-			std::pair<llvm::Value*, llvm::Value*> loopranges = getRanges(L->getHeader());
-			llvm::Instruction* phi = getPhi(L->getHeader());
+			llvm::Instruction* phi = NULL;
 
-			if(phi==NULL){
-				std::cerr << "ERROR: Could not get loop phi instruction" << std::endl;
+			for(llvm::Instruction& I : *L->getHeader()){
+				if(I.getOpcode()==llvm::Instruction::PHI)
+				{
+					for(llvm::Instruction& i : *L->getLoopLatch())
+					{
+						if(&i==I.getOperand(1))	phi = &I;
+					}
+				}
+			}
+
+			if(phi==NULL)
+			{
+				std::cerr << "PHI not detected." << std::endl;
 				return false;
 			}
+
+			//get the begin and end of loop
+			//std::pair<llvm::Value*, llvm::Value*> loopranges = getRanges(L->getHeader());
 
 			bool ismonotonic = true;
 
