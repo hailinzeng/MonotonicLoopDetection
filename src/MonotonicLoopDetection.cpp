@@ -13,7 +13,7 @@
 
 #include <iostream> //debug
 #include <vector>
-#include <utility>
+//#include <utility>
 
 #include <llvm/IR/Argument.h>
 
@@ -41,12 +41,12 @@ namespace{
 			{
 				if(llvm::dyn_cast<llvm::Argument>(n->I->getOperand(i)))
 				{
-					std::cerr << "ERROR: using function argument" << std::endl;
+					std::cerr << "ERROR NO MONOTONIC: using function argument" << std::endl;
 					return false;
 				}
 				else if(llvm::dyn_cast<llvm::CallInst>(n->I->getOperand(i)))
 				{
-					std::cerr << "ERROR: using function output" << std::endl;
+					std::cerr << "ERROR NO MONOTONIC: using function output" << std::endl;
 					return false;
 				}
 				else if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
@@ -80,33 +80,16 @@ namespace{
 		MLD(): llvm::LoopPass(ID)
 		{}
 
-/*
-		std::pair<llvm::Value*,llvm::Value*> getRanges(llvm::BasicBlock* bb)
-		{
-			llvm::Instruction* condition = NULL;
-			llvm::Instruction* phi = NULL;
-
-			for(llvm::Instruction& I : *bb){
-				if(llvm::dyn_cast<llvm::ICmpInst>(&I)) condition = &I;
-				else if(I.getOpcode()==llvm::Instruction::PHI){
-					phi = &I;
-				}
-			}
-
-			std::pair<llvm::Value*,llvm::Value*> p;
-			p.first = phi->getOperand(0);
-			p.second = phi->getOperand(1);
-			return p;
-		}
-*/
-
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
 			std::cerr << std::endl << "#--------------#" << std::endl << std::endl;
 
 			llvm::Instruction* phi = NULL;
+			llvm::Instruction* condition = NULL;
 
 			for(llvm::Instruction& I : *L->getHeader()){
+				if(llvm::dyn_cast<llvm::ICmpInst>(&I)) condition = &I;
+
 				if(I.getOpcode()==llvm::Instruction::PHI)
 				{
 					for(llvm::Instruction& i : *L->getLoopLatch())
@@ -115,15 +98,6 @@ namespace{
 					}
 				}
 			}
-
-			if(phi==NULL)
-			{
-				std::cerr << "PHI not detected." << std::endl;
-				return false;
-			}
-
-			//get the begin and end of loop
-			//std::pair<llvm::Value*, llvm::Value*> loopranges = getRanges(L->getHeader());
 
 			bool ismonotonic = true;
 
@@ -134,18 +108,27 @@ namespace{
 				{
 					if (auto* op = llvm::dyn_cast<llvm::GetElementPtrInst>(&I))
 					{
-						op->dump();
+
+						I.dump();
+
+						llvm::MDNode* N = llvm::MDNode::get(I.getContext(), llvm::MDString::get(I.getContext(), "monotonic"));
+						if(condition==NULL)
+						{
+							std::cerr << "ERROR CANNOT DETECT BOUNDS: endless loop" << std::endl;
+							I.setMetadata("monotonic.unsafe.index", N);
+							return false;
+						}
+
 //						llvm::Value* arr = op->getPointerOperand();
 						llvm::Value* index = op->getOperand(op->getNumOperands()-1);
 						llvm::Instruction* Iroot = llvm::dyn_cast<llvm::Instruction>(index);
 						Node* n = new Node();
 						n->father = NULL;
 						n->I = Iroot;
-						llvm::MDNode* N = llvm::MDNode::get(I.getContext(), llvm::MDString::get(I.getContext(), "monotonic"));
 						if(!search(n,phi))
 						{
 							ismonotonic = false;
-							I.setMetadata("monotonic.unsafe.index", N);
+							I.setMetadata("monotonic.fail.index", N);
 
 						}else{
 							I.setMetadata("monotonic.safe.index", N);
