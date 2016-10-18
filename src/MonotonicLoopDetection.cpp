@@ -39,8 +39,16 @@ namespace{
 		{
 			for(unsigned int i=0; i<n->I->getNumOperands(); i++)
 			{
-				if(llvm::dyn_cast<llvm::Argument>(n->I->getOperand(i))) return false;
-				else if(llvm::dyn_cast<llvm::CallInst>(n->I->getOperand(i))) return false;
+				if(llvm::dyn_cast<llvm::Argument>(n->I->getOperand(i)))
+				{
+					std::cerr << "ERROR: using function argument" << std::endl;
+					return false;
+				}
+				else if(llvm::dyn_cast<llvm::CallInst>(n->I->getOperand(i)))
+				{
+					std::cerr << "ERROR: using function output" << std::endl;
+					return false;
+				}
 				else if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
 				else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(n->I->getOperand(i)))
 				{
@@ -56,7 +64,7 @@ namespace{
 			if((n->father!=NULL)&&(s->I == n->father->I))
 			{
 				std::cerr << "ALERT: Circular reference" << std::endl;
-				return true;
+				continue;
 			}
 			else ret = ret && search(s,fI);
 		}
@@ -145,16 +153,20 @@ namespace{
 					if (auto* op = llvm::dyn_cast<llvm::GetElementPtrInst>(&I))
 					{
 						op->dump();
-						llvm::Value* arr = op->getPointerOperand();
+//						llvm::Value* arr = op->getPointerOperand();
 						llvm::Value* index = op->getOperand(op->getNumOperands()-1);
 						llvm::Instruction* Iroot = llvm::dyn_cast<llvm::Instruction>(index);
 						Node* n = new Node();
 						n->father = NULL;
 						n->I = Iroot;
+						llvm::MDNode* N = llvm::MDNode::get(I.getContext(), llvm::MDString::get(I.getContext(), "monotonic"));
 						if(!search(n,phi))
 						{
-							std::cerr << "ERROR: Index request uses non loop variable: " << std::endl;
 							ismonotonic = false;
+							I.setMetadata("monotonic.unsafe.index", N);
+
+						}else{
+							I.setMetadata("monotonic.safe.index", N);
 						}
 					}
 				}
@@ -162,7 +174,7 @@ namespace{
 
 			std::cerr << "Is monotonic: " << ismonotonic << std::endl;
 
-			return false;
+			return true;
 		}
 	};
 }
