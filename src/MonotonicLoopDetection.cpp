@@ -19,13 +19,12 @@
 
 namespace{
 
-
 	struct Node
 	{
-		llvm::Instruction* I;
+		llvm::Value* V;
 		Node* father;
 		std::vector<Node*> son;
-		Node(): I(NULL), father(NULL){}
+		Node(): V(NULL), father(NULL){}
 	};
 
 	void del(Node* n)
@@ -37,43 +36,58 @@ namespace{
 		}
 	}
 
+
 	bool validate(Node* n)
 	{
 		bool ret = true;
+		if(n->V==NULL) return false;
 
-
-		if(n->I==NULL) return false;
+		if(llvm::dyn_cast<llvm::ConstantInt>(n->V)) return true;
+		else if(llvm::dyn_cast<llvm::Argument>(n->V))
+		{
+			std::cerr << "ERROR NO MONOTONIC: value using function argument" << std::endl;
+			return false;
+		}
+		else if(llvm::dyn_cast<llvm::CallInst>(n->V))
+		{
+			std::cerr << "ERROR NO MONOTONIC: value using function output" << std::endl;
+			return false;
+		}
 
 
 		if(n->son.size()==0)
 		{
-			for(unsigned int i=0; i<n->I->getNumOperands(); i++)
+			if(llvm::Instruction* I = llvm::dyn_cast<llvm::Instruction> (n->V))
 			{
-				if(llvm::dyn_cast<llvm::Argument>(n->I->getOperand(i)))
+				for(unsigned int i=0; i<I->getNumOperands(); i++)
 				{
-					std::cerr << "ERROR NO MONOTONIC: value using function argument" << std::endl;
-					return false;
-				}
-				else if(llvm::dyn_cast<llvm::CallInst>(n->I->getOperand(i)))
-				{
-					std::cerr << "ERROR NO MONOTONIC: value using function output" << std::endl;
-					return false;
-				}
-				else if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
-				else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(n->I->getOperand(i)))
-				{
-					Node* sN = new Node();
-					sN->father = n;
-					sN->I = sI;
-					n->son.push_back(sN);
+					if(llvm::dyn_cast<llvm::Argument>(I->getOperand(i)))
+					{
+						std::cerr << "ERROR NO MONOTONIC: value using function argument" << std::endl;
+						return false;
+					}
+					else if(llvm::dyn_cast<llvm::CallInst>(I->getOperand(i)))
+					{
+						std::cerr << "ERROR NO MONOTONIC: value using function output" << std::endl;
+						return false;
+					}
+					else if(llvm::dyn_cast<llvm::ConstantInt>(I->getOperand(i))) continue;
+					else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(I->getOperand(i)))
+					{
+						Node* sN = new Node();
+						sN->father = n;
+						sN->V = &*sI;
+						n->son.push_back(sN);
+					}
 				}
 			}
 		}
+
 		for(s : n->son)
 		{
-			if((n->father!=NULL)&&(s->I == n->father->I))
+			if((n->father!=NULL)&&(s->V == n->father->V))
 			{
-				std::cerr << "ALERT: value Circular reference" << std::endl;
+//				std::cerr << "ALERT: value Circular reference" << std::endl;
 				continue;
 			}
 			else ret = ret && validate(s);
@@ -85,33 +99,34 @@ namespace{
 	bool search(Node* n, llvm::Instruction* fI)
 	{
 		bool ret = true;
-		if(fI==n->I){
+		if(fI==n->V){
 			return true;
 		}
 		else if(n->son.size()==0){
-			for(unsigned int i=0; i<n->I->getNumOperands(); i++)
+			llvm::Instruction* I = llvm::dyn_cast<llvm::Instruction>(n->V);
+			for(unsigned int i=0; i<I->getNumOperands(); i++)
 			{
-				if(llvm::dyn_cast<llvm::Argument>(n->I->getOperand(i))){
+				if(llvm::dyn_cast<llvm::Argument>(I->getOperand(i))){
 					std::cerr << "ERROR NO MONOTONIC: using function argument" << std::endl;
 					return false;
 				}
-				else if(llvm::dyn_cast<llvm::CallInst>(n->I->getOperand(i))){
+				else if(llvm::dyn_cast<llvm::CallInst>(I->getOperand(i))){
 					std::cerr << "ERROR NO MONOTONIC: using function output" << std::endl;
 					return false;
 				}
-				else if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
-				else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(n->I->getOperand(i))){
+				else if(llvm::dyn_cast<llvm::ConstantInt>(I->getOperand(i))) continue;
+				else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(I->getOperand(i))){
 					Node* sN = new Node();
 					sN->father = n;
-					sN->I = sI;
+					sN->V = &*sI;
 					n->son.push_back(sN);
 				}
 			}
 		}
 		for(s : n->son)
 		{
-			if((n->father!=NULL)&&(s->I == n->father->I)){
-				std::cerr << "ALERT: Circular reference" << std::endl;
+			if((n->father!=NULL)&&(s->V == n->father->V)){
+//				std::cerr << "ALERT: Circular reference" << std::endl;
 				continue;
 			}
 			else ret = ret && search(s,fI);
@@ -136,9 +151,13 @@ namespace{
 			llvm::Instruction* condition = NULL;
 
 			for(llvm::Instruction& I : *L->getHeader()){
-				if(llvm::dyn_cast<llvm::ICmpInst>(&I)) condition = &I;
+				if(llvm::dyn_cast<llvm::ICmpInst>(&I))
+				{
+					condition = &I;
+				}
 
-				if(I.getOpcode()==llvm::Instruction::PHI){
+				if(I.getOpcode()==llvm::Instruction::PHI)
+				{
 					for(llvm::Instruction& i : *L->getLoopLatch())
 					{
 						if(&i==I.getOperand(1))	phi = &I;
@@ -147,31 +166,17 @@ namespace{
 			}
 
 			llvm::Value* start = NULL;
+			llvm::Value* end = NULL;
 
-			if(phi)	{
-				start = phi->getOperand(0);
-				if(!llvm::dyn_cast<llvm::ConstantInt>(start)){
-					Node* n = new Node();
-					llvm::Instruction* I = llvm::dyn_cast<llvm::Instruction>(start);
-					if(I==NULL){
-						if(llvm::dyn_cast<llvm::Argument>(start)){
-							std::cerr << "ERROR: Start variable is function argument" << std::endl;
-							return false;
-						}
-						else if(llvm::dyn_cast<llvm::CallInst>(start)){
-							std::cerr << "ERROR: Start variable is function result" << std::endl;
-							return false;
-						}
-					}
-					else if(!validate(n)){
-						std::cerr << "ERROR: Start variable is unsafe" << std::endl;
-						del(n);
-						return false;
-					}
-					del(n);
-
-				}
+			Node* n1 = new Node();
+			n1->V = &*condition;
+			if(!validate(n1))
+			{
+				std::cerr << "ERROR: Loop have unsafe value" << std::endl;
+				return false;
 			}
+			del(n1);
+
 
 			bool ismonotonic = true;
 
@@ -196,7 +201,7 @@ namespace{
 						llvm::Instruction* Iroot = llvm::dyn_cast<llvm::Instruction>(index);
 						Node* n = new Node();
 						n->father = NULL;
-						n->I = Iroot;
+						n->V = &*Iroot;
 						if(!search(n,phi)){
 							ismonotonic = false;
 							I.setMetadata("monotonic.fail.index", N);
