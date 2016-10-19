@@ -28,25 +28,35 @@ namespace{
 		Node(): I(NULL), father(NULL){}
 	};
 
-	bool search(Node* n, llvm::Instruction* fI)
+	void del(Node* n)
+	{
+		if(n==NULL) return;
+		else {
+			for(s : n->son) del(s);
+			delete n;
+		}
+	}
+
+	bool validate(Node* n)
 	{
 		bool ret = true;
-		if(fI==n->I)
-		{
-			return true;
-		}
-		else if(n->son.size()==0)
+
+
+		if(n->I==NULL) return false;
+
+
+		if(n->son.size()==0)
 		{
 			for(unsigned int i=0; i<n->I->getNumOperands(); i++)
 			{
 				if(llvm::dyn_cast<llvm::Argument>(n->I->getOperand(i)))
 				{
-					std::cerr << "ERROR NO MONOTONIC: using function argument" << std::endl;
+					std::cerr << "ERROR NO MONOTONIC: value using function argument" << std::endl;
 					return false;
 				}
 				else if(llvm::dyn_cast<llvm::CallInst>(n->I->getOperand(i)))
 				{
-					std::cerr << "ERROR NO MONOTONIC: using function output" << std::endl;
+					std::cerr << "ERROR NO MONOTONIC: value using function output" << std::endl;
 					return false;
 				}
 				else if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
@@ -63,6 +73,44 @@ namespace{
 		{
 			if((n->father!=NULL)&&(s->I == n->father->I))
 			{
+				std::cerr << "ALERT: value Circular reference" << std::endl;
+				continue;
+			}
+			else ret = ret && validate(s);
+		}
+
+		return ret;
+	}
+
+	bool search(Node* n, llvm::Instruction* fI)
+	{
+		bool ret = true;
+		if(fI==n->I){
+			return true;
+		}
+		else if(n->son.size()==0){
+			for(unsigned int i=0; i<n->I->getNumOperands(); i++)
+			{
+				if(llvm::dyn_cast<llvm::Argument>(n->I->getOperand(i))){
+					std::cerr << "ERROR NO MONOTONIC: using function argument" << std::endl;
+					return false;
+				}
+				else if(llvm::dyn_cast<llvm::CallInst>(n->I->getOperand(i))){
+					std::cerr << "ERROR NO MONOTONIC: using function output" << std::endl;
+					return false;
+				}
+				else if(llvm::dyn_cast<llvm::ConstantInt>(n->I->getOperand(i))) continue;
+				else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(n->I->getOperand(i))){
+					Node* sN = new Node();
+					sN->father = n;
+					sN->I = sI;
+					n->son.push_back(sN);
+				}
+			}
+		}
+		for(s : n->son)
+		{
+			if((n->father!=NULL)&&(s->I == n->father->I)){
 				std::cerr << "ALERT: Circular reference" << std::endl;
 				continue;
 			}
@@ -90,12 +138,38 @@ namespace{
 			for(llvm::Instruction& I : *L->getHeader()){
 				if(llvm::dyn_cast<llvm::ICmpInst>(&I)) condition = &I;
 
-				if(I.getOpcode()==llvm::Instruction::PHI)
-				{
+				if(I.getOpcode()==llvm::Instruction::PHI){
 					for(llvm::Instruction& i : *L->getLoopLatch())
 					{
 						if(&i==I.getOperand(1))	phi = &I;
 					}
+				}
+			}
+
+			llvm::Value* start = NULL;
+
+			if(phi)	{
+				start = phi->getOperand(0);
+				if(!llvm::dyn_cast<llvm::ConstantInt>(start)){
+					Node* n = new Node();
+					llvm::Instruction* I = llvm::dyn_cast<llvm::Instruction>(start);
+					if(I==NULL){
+						if(llvm::dyn_cast<llvm::Argument>(start)){
+							std::cerr << "ERROR: Start variable is function argument" << std::endl;
+							return false;
+						}
+						else if(llvm::dyn_cast<llvm::CallInst>(start)){
+							std::cerr << "ERROR: Start variable is function result" << std::endl;
+							return false;
+						}
+					}
+					else if(!validate(n)){
+						std::cerr << "ERROR: Start variable is unsafe" << std::endl;
+						del(n);
+						return false;
+					}
+					del(n);
+
 				}
 			}
 
@@ -106,14 +180,12 @@ namespace{
 			{
 				for(llvm::Instruction& I : *bb)
 				{
-					if (auto* op = llvm::dyn_cast<llvm::GetElementPtrInst>(&I))
-					{
+					if (auto* op = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)){
 
 						I.dump();
 
 						llvm::MDNode* N = llvm::MDNode::get(I.getContext(), llvm::MDString::get(I.getContext(), "monotonic"));
-						if(condition==NULL)
-						{
+						if(condition==NULL){
 							std::cerr << "ERROR CANNOT DETECT BOUNDS: endless loop" << std::endl;
 							I.setMetadata("monotonic.unsafe.index", N);
 							return false;
@@ -125,14 +197,14 @@ namespace{
 						Node* n = new Node();
 						n->father = NULL;
 						n->I = Iroot;
-						if(!search(n,phi))
-						{
+						if(!search(n,phi)){
 							ismonotonic = false;
 							I.setMetadata("monotonic.fail.index", N);
 
 						}else{
 							I.setMetadata("monotonic.safe.index", N);
 						}
+						del(n);
 					}
 				}
 			}
