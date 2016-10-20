@@ -45,12 +45,12 @@ namespace{
 		if(llvm::dyn_cast<llvm::ConstantInt>(n->V)) return true;
 		else if(llvm::dyn_cast<llvm::Argument>(n->V))
 		{
-			std::cerr << "ERROR NO MONOTONIC: value using function argument" << std::endl;
+			std::cerr << "VALIDATION ERROR: value using function argument" << std::endl;
 			return false;
 		}
 		else if(llvm::dyn_cast<llvm::CallInst>(n->V))
 		{
-			std::cerr << "ERROR NO MONOTONIC: value using function output" << std::endl;
+			std::cerr << "VALIDATION ERROR: value using function output" << std::endl;
 			return false;
 		}
 
@@ -63,12 +63,12 @@ namespace{
 				{
 					if(llvm::dyn_cast<llvm::Argument>(I->getOperand(i)))
 					{
-						std::cerr << "ERROR NO MONOTONIC: value using function argument" << std::endl;
+						std::cerr << "VALIDATION ERROR: value using function argument" << std::endl;
 						return false;
 					}
 					else if(llvm::dyn_cast<llvm::CallInst>(I->getOperand(i)))
 					{
-						std::cerr << "ERROR NO MONOTONIC: value using function output" << std::endl;
+						std::cerr << "VALIDATION ERROR: value using function output" << std::endl;
 						return false;
 					}
 					else if(llvm::dyn_cast<llvm::ConstantInt>(I->getOperand(i))) continue;
@@ -107,11 +107,11 @@ namespace{
 			for(unsigned int i=0; i<I->getNumOperands(); i++)
 			{
 				if(llvm::dyn_cast<llvm::Argument>(I->getOperand(i))){
-					std::cerr << "ERROR NO MONOTONIC: using function argument" << std::endl;
+					std::cerr << "SEARCH ERROR: using function argument" << std::endl;
 					return false;
 				}
 				else if(llvm::dyn_cast<llvm::CallInst>(I->getOperand(i))){
-					std::cerr << "ERROR NO MONOTONIC: using function output" << std::endl;
+					std::cerr << "SEARCH: using function output" << std::endl;
 					return false;
 				}
 				else if(llvm::dyn_cast<llvm::ConstantInt>(I->getOperand(i))) continue;
@@ -145,11 +145,12 @@ namespace{
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
-			std::cerr << std::endl << "#--------------#" << std::endl << std::endl;
+			std::cerr << "#--------------#" << std::endl;
 
 			llvm::Instruction* phi = NULL;
 			llvm::Instruction* condition = NULL;
 
+			//get phi and cmp instruction
 			for(llvm::Instruction& I : *L->getHeader()){
 				if(llvm::dyn_cast<llvm::ICmpInst>(&I))
 				{
@@ -165,20 +166,42 @@ namespace{
 				}
 			}
 
-			llvm::Value* start = NULL;
-			llvm::Value* end = NULL;
-
-			Node* n1 = new Node();
-			n1->V = &*condition;
-			if(!validate(n1))
+			if(!condition)
 			{
-				std::cerr << "ERROR: Loop have unsafe value" << std::endl;
+				std::cerr << "NOT MONOTONIC: Can't detect loop's limits, condition not found" << std::endl;
 				return false;
 			}
-			del(n1);
+			else
+			{
+				Node* n = new Node();
+				n->V = &*condition;
+				if(!validate(n))
+				{
+					std::cerr << "NOT MONOTONIC: Loop have unsafe value" << std::endl;
+					return false;
+				}
+				del(n);
+			}
 
+			llvm::ConstantInt* start = NULL;
+			llvm::ConstantInt* end = NULL;
 
-			bool ismonotonic = true;
+			if(!(start = llvm::dyn_cast<llvm::ConstantInt>(phi->getOperand(0))))
+			{
+				std::cerr << "NOT MONOTONIC: Start variable is not constant" << std::endl;
+				return false;
+			}
+
+			for(unsigned int i = 0; i < condition->getNumOperands(); i++)
+			{
+				if(end = llvm::dyn_cast<llvm::ConstantInt>(condition->getOperand(i))) break;
+			}
+			if(end == NULL){
+				std::cerr << "NOT MONOTONIC: End variable is not constant" << std::endl;
+				return false;
+			}
+
+			bool changed = false;
 
 			std::vector<llvm::BasicBlock *> v = L->getBlocks();
 			for(llvm::BasicBlock* bb : v)
@@ -188,35 +211,22 @@ namespace{
 					if (auto* op = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)){
 
 						I.dump();
-
-						llvm::MDNode* N = llvm::MDNode::get(I.getContext(), llvm::MDString::get(I.getContext(), "monotonic"));
-						if(condition==NULL){
-							std::cerr << "ERROR CANNOT DETECT BOUNDS: endless loop" << std::endl;
-							I.setMetadata("monotonic.unsafe.index", N);
-							return false;
-						}
-
-//						llvm::Value* arr = op->getPointerOperand();
 						llvm::Value* index = op->getOperand(op->getNumOperands()-1);
 						llvm::Instruction* Iroot = llvm::dyn_cast<llvm::Instruction>(index);
 						Node* n = new Node();
 						n->father = NULL;
 						n->V = &*Iroot;
-						if(!search(n,phi)){
-							ismonotonic = false;
-							I.setMetadata("monotonic.fail.index", N);
-
-						}else{
+						if(search(n,phi)){
+							llvm::MDNode* N = llvm::MDNode::get(I.getContext(), llvm::MDString::get(I.getContext(), "monotonic"));
 							I.setMetadata("monotonic.safe.index", N);
+							changed = true;
 						}
 						del(n);
 					}
 				}
 			}
 
-			std::cerr << "Is monotonic: " << ismonotonic << std::endl;
-
-			return true;
+			return (changed==true)?changed:false;
 		}
 	};
 }

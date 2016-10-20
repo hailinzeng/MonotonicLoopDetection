@@ -5,122 +5,152 @@ int __attribute__ ((noinline)) foo(int x)
 	return x+1;
 }
 
-//unsafe: uses function args
-void test1(int arg)
+//monotonic loop
+void test_sucess_1()
 {
-	int z = arg;
-	int arr1[] = {1,2,3,4,5,6,7};
-	for (int i = 3;i < 5; i++)
-	{
-		arr1[i+z] = 3;
-	}
-}
-
-//safe: index variable don't depend of unsafe values
-void test2()
-{
-	int arr2[] = {1,2,3,4,5,6,7};
+	int arr[] = {1,2,3,4,5,6,7};
 	for (int i = 1;i < 3; i++)
 	{
-		arr2[i] = i+3;
+		arr[i] = i+3;
 	}
 }
 
-//safe: index variable is not the loop variable but don't depend of unsafe values
-void test3()
+//monotonic loop
+void test_sucess_2()
 {
 	int g = 3;
-	int arr3[] = {1,2,3,4,5,6,7};
+	int arr[] = {1,2,3,4,5,6,7};
 	for (int i = 1;i < 3; i++)
 	{
-		arr3[g] = g;
+		arr[g] = g;
 		g+=2;
 	}
 }
 
-//unsafe: index variable is a function result
-void test4(int argc)
+//monotonic loop but array's index uses function parameter
+void test_fail_1(int arg)
 {
-	int arr4[] = {1,2,3,4,5,6,7};
-	for (int i = 1; i < 3; i++)
+	int z = arg;
+	int arr[] = {1,2,3,4,5,6,7};
+	for (int i = 3;i < 5; i++)
 	{
-		arr4[foo(argc+i)] = i + 1;
+		arr[i+z] = 3;
 	}
 }
 
-//unsafe: uses function args
-void test5(int argc)
+//not monotonic loop, uses function parameter
+void test_fail_2(int argc)
 {
-	int arr5[] = {1,2,3,4,5,6,7};
-	for (int i = 1; i < 3; i++)
+	int arr[] = {1,2,3,4,5,6,7};
+	for (int i = 1; i < argc; i++)
 	{
-		arr5[argc] = i + 1;
+		arr[i] = i;
 	}
 }
 
-//unsafe: cannot get the end of the loop
-void test6()
+//monotonic loop, but array uses function result
+void test_fail_3(int argc)
 {
-	int arr6[] = {1,2,3,4,5,6,7};
+	int arr[] = {1,2,3,4,5,6,7};
+	for (int i = 1; i < 3; i++)
+	{
+		arr[foo(argc+i)] = i + 1;
+	}
+}
+
+//cannot get the end value
+void test_fail_4()
+{
+	int arr[] = {1,2,3,4,5,6,7};
 	for (int i = 1; ; i++)
 	{
-		arr6[i] = i + 1;
+		arr[i] = i + 1;
 	}
 }
 
-//unsafe: cannot get the end of the loop
-void test7()
+//cannot get the end value
+void test_fail_5()
 {
-	int arr7[] = {1,2,3,4,5,6,7};
+	int arr[] = {1,2,3,4,5,6,7};
 	for (int i=0; ;)
 	{
-		arr7[i] = i+1;
+		arr[i] = i+1;
 	}
 }
 
-//safe: index uses function parameter but still can get the start and begin of the loop
-void test8(int argc)
+//condition uses function parameter
+void test_fail_6(int argc)
 {
-	int arr8[] = {1,2,3,4,5,6,7};
+	int arr[] = {1,2,3,4,5,6,7};
 	for (int i=0; argc<5; i++)
 	{
-		arr8[i] = i + 1;
+		arr[i] = i + 1;
 	}
 }
 
-//unsafe: index uses function parameter, cannot detect the end of the loop
-void test9(int argc)
+//condition uses function parameter
+void test_fail_7(int argc)
 {
-	int arr9[] = {1,2,3,4,5,6,7};
+	int arr[] = {1,2,3,4,5,6,7};
 	for (int i=0; 5<argc; i++)
 	{
-		arr9[i] = i + 1;
+		arr[i] = i + 1;
 	}
 }
 
-//unsafe: start variable is function argument or function
-void test10(int argc)
+//start value is function parameter
+void test_fail_8(int argc)
 {
-	int arr10[] = {1,2,3,4,5,6,7};
+	int arr[] = {1,2,3,4,5,6,7};
 	for (int i=argc; i<10; i++)
 	{
-		arr10[i] = i + 1;
+		arr[i] = i + 1;
 	}
 }
 
-int main(int argc, char** argv)
+//end value is not constant
+void test_fail_9(int argc)
 {
+	int arr[] = {1,2,3,4,5,6,7};
 
-	test1(argc);
-	test2();
-	test3();
-	test4(argc);
-	test5(argc);
-	test6();
-	test7();
-	test8(argc);
-	test9(argc);
-	test10(argc);
+	int j = 3;
+	if(argc < 2)
+	{
+		j = 4;
+	}
 
-	return argc;
+	for (int i=0; i<j; i++)
+	{
+		arr[i] = i + 1;
+	}
+}
+
+//start value is not constant
+void test_fail_11(int argc)
+{
+	int arr[] = {1,2,3,4,5,6,7};
+
+	int j = 3;
+	if(argc < 2)
+	{
+		j = 4;
+	}
+
+	for (int i=j; i<10; i++)
+	{
+		arr[i] = i + 1;
+	}
+}
+
+//cannot get start and end values
+void test_fail_12()
+{
+	int arr[] = {1,2,3,4,5,6,7};
+	int i = 10;
+	for ( ; ; )
+	{
+		arr[i] = 12;
+		i++;
+	}
+
 }
