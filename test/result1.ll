@@ -187,6 +187,7 @@ for.cond:                                         ; preds = %for.inc, %entry
   %add = add nsw i32 %i.0, 1
   %idxprom = sext i32 %i.0 to i64
   %1 = call i1 @__check_array_min(i32 %i.0, i32 1)
+  %2 = call i1 @__check_array_max(i32 %i.0, i32 7)
   %arrayidx = getelementptr inbounds [7 x i32], [7 x i32]* %arr, i64 0, i64 %idxprom
   store i32 %add, i32* %arrayidx, align 4
   br label %for.inc
@@ -235,6 +236,7 @@ for.body:                                         ; preds = %for.cond
   %add = add nsw i32 %i.0, 1
   %idxprom = sext i32 %i.0 to i64
   %1 = call i1 @__check_array_min(i32 %i.0, i32 0)
+  %2 = call i1 @__check_array_max(i32 %i.0, i32 7)
   %arrayidx = getelementptr inbounds [7 x i32], [7 x i32]* %arr, i64 0, i64 %idxprom
   store i32 %add, i32* %arrayidx, align 4
   br label %for.inc
@@ -264,6 +266,7 @@ for.body:                                         ; preds = %for.cond
   %add = add nsw i32 %i.0, 1
   %idxprom = sext i32 %i.0 to i64
   %1 = call i1 @__check_array_min(i32 %i.0, i32 0)
+  %2 = call i1 @__check_array_max(i32 %i.0, i32 7)
   %arrayidx = getelementptr inbounds [7 x i32], [7 x i32]* %arr, i64 0, i64 %idxprom
   store i32 %add, i32* %arrayidx, align 4
   br label %for.inc
@@ -394,6 +397,7 @@ for.cond:                                         ; preds = %for.cond, %entry
   %i.0 = phi i32 [ 10, %entry ], [ %inc, %for.cond ]
   %idxprom = sext i32 %i.0 to i64
   %1 = call i1 @__check_array_min(i32 %i.0, i32 10)
+  %2 = call i1 @__check_array_max(i32 %i.0, i32 7)
   %arrayidx = getelementptr inbounds [7 x i32], [7 x i32]* %arr, i64 0, i64 %idxprom
   store i32 12, i32* %arrayidx, align 4
   %inc = add nsw i32 %i.0, 1

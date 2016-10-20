@@ -252,17 +252,15 @@ namespace{
 		{
 			llvm::PointerType* _p = arr->getType();
 			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
-			llvm::Value* size = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),a->getNumElements());
-			llvm::Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),0);
+			//llvm::Value* size = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),a->getNumElements());
+			//llvm::Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),0);
 
 			llvm::Module* m = ptr->getParent()->getParent()->getParent();
 
 			if(1)
 			{
 				llvm::IRBuilder<> builder(ptr);
-
 				llvm::Value* v = NULL;
-
 				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 				{
 					v = se->getOperand(0);
@@ -273,7 +271,7 @@ namespace{
 					llvm::Value* args[] = {v,min};
 					builder.CreateCall(p.first,args);
 				}else{
-					llvm::Value* args[] = {v,zero};
+					llvm::Value* args[] = {v,builder.getInt32(0)};
 					builder.CreateCall(p.second,args);
 				}
 			}
@@ -292,8 +290,8 @@ namespace{
 					llvm::Value* args[] = {v,max};
 					builder.CreateCall(p.second,args);
 				}else{
-					llvm::Value* args[] = {v,size};
-//					builder.CreateCall(p.second,args);
+					llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
+					builder.CreateCall(p.second,args);
 				}
 
 			}
