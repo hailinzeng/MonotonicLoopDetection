@@ -16,6 +16,10 @@
 //#include <utility>
 
 #include <llvm/IR/Argument.h>
+#include <llvm/IR/TypeBuilder.h>
+#include <llvm/IR/Attributes.h>
+
+#include <llvm/IR/IRBuilder.h>
 
 namespace{
 
@@ -35,7 +39,6 @@ namespace{
 			delete n;
 		}
 	}
-
 
 	bool validate(Node* n)
 	{
@@ -87,7 +90,6 @@ namespace{
 		{
 			if((n->father!=NULL)&&(s->V == n->father->V))
 			{
-//				std::cerr << "ALERT: value Circular reference" << std::endl;
 				continue;
 			}
 			else ret = ret && validate(s);
@@ -126,7 +128,6 @@ namespace{
 		for(s : n->son)
 		{
 			if((n->father!=NULL)&&(s->V == n->father->V)){
-//				std::cerr << "ALERT: Circular reference" << std::endl;
 				continue;
 			}
 			else ret = ret && search(s,fI);
@@ -162,21 +163,202 @@ namespace{
 		std::pair<llvm::Value*,llvm::Value*> p;
 	}
 
+	llvm::Function* exit_prototype(llvm::Module* M)
+	{
+		llvm::LLVMContext& Ctx = M->getContext();
+		llvm::Constant* c = M->getOrInsertFunction("exit", llvm::Type::getVoidTy(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
+		llvm::Function* exit_f = llvm::cast<llvm::Function>(c);
+		return exit_f;
+	}
+
+	llvm::Function* createMax(llvm::Module* M, llvm::Function* exit_f)
+	{
+		llvm::LLVMContext& Ctx = M->getContext();
+		llvm::Constant* c = M->getOrInsertFunction("__check_array_max", llvm::Type::getInt1Ty(Ctx), llvm::Type::getInt32Ty(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
+		llvm::Function* max_f = llvm::cast<llvm::Function>(c);
+
+		llvm::Function::arg_iterator args = max_f->arg_begin();
+		llvm::Value* idx = &*args++;
+		idx->setName("idx");
+		llvm::Value* mx = &*args++;
+		mx->setName("mx");
+
+		llvm::BasicBlock* entry = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", max_f);
+		llvm::BasicBlock* ret = llvm::BasicBlock::Create(llvm::getGlobalContext(), "return", max_f);
+		llvm::BasicBlock* cond_false = llvm::BasicBlock::Create(llvm::getGlobalContext(), "cond_false", max_f);
+
+		llvm::IRBuilder<> builder(entry);
+
+		llvm::Value* less = builder.CreateICmpSLT(idx, mx, "tmp");
+
+		builder.CreateCondBr(less, ret, cond_false);
+		builder.SetInsertPoint(ret);
+		builder.CreateRet(less);
+		builder.SetInsertPoint(cond_false);
+
+		llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
+
+		builder.CreateCall(exit_f,errval);
+		builder.CreateRet(less);
+
+		return max_f;
+	}
+
+
+	llvm::Function* createMin(llvm::Module* M, llvm::Function* exit_f)
+	{
+		llvm::LLVMContext& Ctx = M->getContext();
+		llvm::Constant* c = M->getOrInsertFunction("__check_array_min", llvm::Type::getInt1Ty(Ctx), llvm::Type::getInt32Ty(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
+		llvm::Function* min_f = llvm::cast<llvm::Function>(c);
+
+		llvm::Function::arg_iterator args = min_f->arg_begin();
+		llvm::Value* idx = &*args++;
+		idx->setName("idx");
+		llvm::Value* mn = &*args++;
+		mn->setName("mn");
+
+		llvm::BasicBlock* entry = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", min_f);
+		llvm::BasicBlock* ret = llvm::BasicBlock::Create(llvm::getGlobalContext(), "return", min_f);
+		llvm::BasicBlock* cond_false = llvm::BasicBlock::Create(llvm::getGlobalContext(), "cond_false", min_f);
+
+		llvm::IRBuilder<> builder(entry);
+
+		llvm::Value* greater = builder.CreateICmpSGE(idx, mn, "tmp");
+
+		builder.CreateCondBr(greater, ret, cond_false);
+		builder.SetInsertPoint(ret);
+		builder.CreateRet(greater);
+		builder.SetInsertPoint(cond_false);
+
+		llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
+
+		builder.CreateCall(exit_f,errval);
+		builder.CreateRet(greater);
+
+		return min_f;
+	}
+
+	std::pair<llvm::Function*,llvm::Function*> p;
+
+	void checkArrayPrototype(llvm::Module* M, llvm::Function* exit_f)
+	{
+		p.first = createMin(M,exit_f);
+		p.second = createMax(M,exit_f);
+	}
+
 	void createCheckArrayBounds(llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr)
 	{
+		if(llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0)))
+		{
+			llvm::PointerType* _p = arr->getType();
+			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
+			llvm::Value* size = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),a->getNumElements());
+			llvm::Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),0);
 
+			llvm::Module* m = ptr->getParent()->getParent()->getParent();
+
+			if(1)
+			{
+				llvm::IRBuilder<> builder(ptr);
+
+				llvm::Value* v = NULL;
+
+				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+				{
+					v = se->getOperand(0);
+				}
+
+				if(min)
+				{
+					llvm::Value* args[] = {v,min};
+					builder.CreateCall(p.first,args);
+				}else{
+					llvm::Value* args[] = {v,zero};
+					builder.CreateCall(p.second,args);
+				}
+			}
+
+			if(1)
+			{
+				llvm::IRBuilder<> builder(ptr);
+				llvm::Value* v = NULL;
+				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+				{
+					v = se->getOperand(0);
+				}
+
+				if(max)
+				{
+					llvm::Value* args[] = {v,max};
+					builder.CreateCall(p.second,args);
+				}else{
+					llvm::Value* args[] = {v,size};
+//					builder.CreateCall(p.second,args);
+				}
+
+			}
+
+		}
 	}
 
-	bool isMonotonic(llvm::Loop* L, llvm::PHINode* phi)
+	bool isMonotonic(llvm::Instruction* phi, llvm::Value* min, llvm::Value* max)
 	{
-		return false;
+		if(llvm::Instruction* inc = llvm::dyn_cast<llvm::Instruction>(phi->getOperand(1)))
+		{
+			Node* n;
+			if((!(inc->getOperand(0)==phi))&&(!(inc->getOperand(0)==phi)))
+			{
+				std::cerr << "Increment variable don't is related to loop variable" << std::endl;
+				return (min || max);
+			}
+			if(!(inc->getOperand(0)==phi))
+			{
+				n = new Node();
+				n->V = inc->getOperand(0);
+				if(!validate(n))
+				{
+					std::cerr << "NOT MONOTONIC: loop increment uses variable with unknown value" << std::endl;
+					del(n);
+					return false;
+				}
+				del(n);
+			}
+			if(!(inc->getOperand(1)==phi))
+			{
+				n = new Node();
+				n->V = inc->getOperand(1);
+				if(!validate(n))
+				{
+					std::cerr << "NOT MONOTONUC: loop increment uses variable with unknow value" << std::endl;
+					del(n);
+					return false;
+				}
+				del(n);
+			}
+		}else{
+			std::cerr << "NOT MONOTONIC: increment not found" << std::endl;
+			return false;
+		}
+		return (min || max);
 	}
 
-	std::vector<llvm::GetElementPtrInst*> getArrays(llvm::BasicBlock* bb)
+	std::vector<llvm::GetElementPtrInst*> getArrays(llvm::Loop* L)
 	{
 		std::vector<llvm::GetElementPtrInst*> vec;
+		for(llvm::BasicBlock* bb : L->getBlocks())
+		{
+			for(llvm::Instruction& I : *bb)
+			{
+				if (auto* op = llvm::dyn_cast<llvm::GetElementPtrInst>(&I))
+				{
+					vec.push_back(op);
+				}
+			}
+		}
 		return vec;
 	}
+
+	bool checkFunctionCreated = false;
 
 	struct MLD: llvm::LoopPass
 	{
@@ -187,6 +369,15 @@ namespace{
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
+
+			if(!checkFunctionCreated)
+			{
+				llvm::Function* exit_f = exit_prototype(L->getHeader()->getModule());
+				checkArrayPrototype(L->getHeader()->getModule(),exit_f);
+				checkFunctionCreated = true;
+			}
+
+
 			std::cerr << "-------------" << std::endl;
 			llvm::Instruction* phi = NULL;
 			llvm::Instruction* condition = NULL;
@@ -209,14 +400,24 @@ namespace{
 			}
 
 			llvm::Value* min = getMin(phi);
-			if(min) min->dump();
-			llvm::Value* max = getMax(phi,condition);
-			if(max) max->dump();
-/*
-			if(isMonotonic(L,phi))
+			if(min)
 			{
-				for(idx : getArrays())
+				std::cerr << "Min: ";
+				min->dump();
+			}
+			llvm::Value* max = getMax(phi,condition);
+			if(max)
+			{
+				std::cerr << "Max: ";
+				max->dump();
+			}
+
+			if(isMonotonic(phi,min,max))
+			{
+				std::cerr << "Is Monotonic" << std::endl;
+				for(idx : getArrays(L))
 				{
+					idx->dump();
 					Node* n = new Node();
 					n->V = &*idx;
 					if(search(n,phi))
@@ -226,8 +427,6 @@ namespace{
 					del(n);
 				}
 			}
-*/
-			return true;
 		}
 	};
 }
