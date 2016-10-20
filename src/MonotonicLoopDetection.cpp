@@ -136,6 +136,45 @@ namespace{
 	}
 
 
+	llvm::Value* getMax(llvm::ICmpInst* cmp)
+	{
+		if(llvm::dyn_cast<llvm::ICmpInst>(cmp))
+		{
+
+		}
+		return NULL;
+	}
+
+	llvm::Value* getMin(llvm::Instruction* phi)
+	{
+		if(llvm::dyn_cast<llvm::PHINode>(phi))
+		{
+			return phi->getOperand(0);
+		}
+		return NULL;
+	}
+
+	std::pair<llvm::Value*,llvm::Value*> getArrayBounds()
+	{
+		std::pair<llvm::Value*,llvm::Value*> p;
+	}
+
+	void createCheckArrayBounds(llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr)
+	{
+
+	}
+
+	bool isMonotonic(llvm::Loop* L, llvm::PHINode* phi)
+	{
+		return false;
+	}
+
+	std::vector<llvm::GetElementPtrInst*> getArrays(llvm::BasicBlock* bb)
+	{
+		std::vector<llvm::GetElementPtrInst*> vec;
+		return vec;
+	}
+
 	struct MLD: llvm::LoopPass
 	{
 		static char ID;
@@ -145,18 +184,10 @@ namespace{
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
-			std::cerr << "#--------------#" << std::endl;
-
+			std::cerr << "-------------" << std::endl;
 			llvm::Instruction* phi = NULL;
-			llvm::Instruction* condition = NULL;
 
-			//get phi and cmp instruction
 			for(llvm::Instruction& I : *L->getHeader()){
-				if(llvm::dyn_cast<llvm::ICmpInst>(&I))
-				{
-					condition = &I;
-				}
-
 				if(I.getOpcode()==llvm::Instruction::PHI)
 				{
 					for(llvm::Instruction& i : *L->getLoopLatch())
@@ -166,67 +197,29 @@ namespace{
 				}
 			}
 
-			if(!condition)
+			if(phi==NULL)
 			{
-				std::cerr << "NOT MONOTONIC: Can't detect loop's limits, condition not found" << std::endl;
+				std::cerr << "Phi not found" << std::endl;
 				return false;
 			}
-			else
+
+			llvm::Value* min = getMin(phi);
+			llvm::Value* max = getMax(phi);
+/*
+			if(isMonotonic(L,phi))
 			{
-				Node* n = new Node();
-				n->V = &*condition;
-				if(!validate(n))
+				for(idx : getArrays())
 				{
-					std::cerr << "NOT MONOTONIC: Loop have unsafe value" << std::endl;
-					return false;
-				}
-				del(n);
-			}
-
-			llvm::ConstantInt* start = NULL;
-			llvm::ConstantInt* end = NULL;
-
-			if(!(start = llvm::dyn_cast<llvm::ConstantInt>(phi->getOperand(0))))
-			{
-				std::cerr << "NOT MONOTONIC: Start variable is not constant" << std::endl;
-				return false;
-			}
-
-			for(unsigned int i = 0; i < condition->getNumOperands(); i++)
-			{
-				if(end = llvm::dyn_cast<llvm::ConstantInt>(condition->getOperand(i))) break;
-			}
-			if(end == NULL){
-				std::cerr << "NOT MONOTONIC: End variable is not constant" << std::endl;
-				return false;
-			}
-
-			bool changed = false;
-
-			std::vector<llvm::BasicBlock *> v = L->getBlocks();
-			for(llvm::BasicBlock* bb : v)
-			{
-				for(llvm::Instruction& I : *bb)
-				{
-					if (auto* op = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)){
-
-						I.dump();
-						llvm::Value* index = op->getOperand(op->getNumOperands()-1);
-						llvm::Instruction* Iroot = llvm::dyn_cast<llvm::Instruction>(index);
-						Node* n = new Node();
-						n->father = NULL;
-						n->V = &*Iroot;
-						if(search(n,phi)){
-							llvm::MDNode* N = llvm::MDNode::get(I.getContext(), llvm::MDString::get(I.getContext(), "monotonic"));
-							I.setMetadata("monotonic.safe.index", N);
-							changed = true;
-						}
-						del(n);
+					Node* n = new Node();
+					n->V = &*idx;
+					if(search(n,phi))
+					{
+						createCheckArrayBounds(min,max,idx);
 					}
 				}
 			}
-
-			return (changed==true)?changed:false;
+*/
+			return true;
 		}
 	};
 }
