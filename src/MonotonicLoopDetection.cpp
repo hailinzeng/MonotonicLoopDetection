@@ -136,11 +136,14 @@ namespace{
 	}
 
 
-	llvm::Value* getMax(llvm::ICmpInst* cmp)
+	llvm::Value* getMax(llvm::Instruction* phi, llvm::Instruction* cmp)
 	{
-		if(llvm::dyn_cast<llvm::ICmpInst>(cmp))
+		if((cmp && phi)&&(llvm::dyn_cast<llvm::ICmpInst>(cmp)))
 		{
-
+			Node* n = new Node();
+			n->V = cmp->getOperand(0);
+			if(cmp->getOperand(0)==phi) return cmp->getOperand(1);
+			else if(cmp->getOperand(1)==phi) return cmp->getOperand(0);
 		}
 		return NULL;
 	}
@@ -186,9 +189,11 @@ namespace{
 		{
 			std::cerr << "-------------" << std::endl;
 			llvm::Instruction* phi = NULL;
+			llvm::Instruction* condition = NULL;
 
 			for(llvm::Instruction& I : *L->getHeader()){
-				if(I.getOpcode()==llvm::Instruction::PHI)
+				if(llvm::dyn_cast<llvm::ICmpInst>(&I)) condition = &I;
+				else if(I.getOpcode()==llvm::Instruction::PHI)
 				{
 					for(llvm::Instruction& i : *L->getLoopLatch())
 					{
@@ -204,7 +209,9 @@ namespace{
 			}
 
 			llvm::Value* min = getMin(phi);
-			llvm::Value* max = getMax(phi);
+			if(min) min->dump();
+			llvm::Value* max = getMax(phi,condition);
+			if(max) max->dump();
 /*
 			if(isMonotonic(L,phi))
 			{
@@ -216,6 +223,7 @@ namespace{
 					{
 						createCheckArrayBounds(min,max,idx);
 					}
+					del(n);
 				}
 			}
 */
