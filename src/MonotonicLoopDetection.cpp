@@ -100,7 +100,7 @@ namespace{
 
 	bool search(Node* n, llvm::Instruction* fI)
 	{
-		bool ret = true;
+		bool ret = false;
 		if(fI==n->V){
 			return true;
 		}
@@ -108,16 +108,7 @@ namespace{
 			llvm::Instruction* I = llvm::dyn_cast<llvm::Instruction>(n->V);
 			for(unsigned int i=0; i<I->getNumOperands(); i++)
 			{
-				if(llvm::dyn_cast<llvm::Argument>(I->getOperand(i))){
-					std::cerr << "SEARCH ERROR: using function argument" << std::endl;
-					return false;
-				}
-				else if(llvm::dyn_cast<llvm::CallInst>(I->getOperand(i))){
-					std::cerr << "SEARCH: using function output" << std::endl;
-					return false;
-				}
-				else if(llvm::dyn_cast<llvm::ConstantInt>(I->getOperand(i))) continue;
-				else if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(I->getOperand(i))){
+				if(llvm::Instruction* sI = llvm::dyn_cast<llvm::Instruction>(I->getOperand(i))){
 					Node* sN = new Node();
 					sN->father = n;
 					sN->V = &*sI;
@@ -130,7 +121,7 @@ namespace{
 			if((n->father!=NULL)&&(s->V == n->father->V)){
 				continue;
 			}
-			else ret = ret && search(s,fI);
+			else ret = ret || search(s,fI);
 		}
 
 		return ret;
@@ -306,7 +297,7 @@ namespace{
 			Node* n;
 			if((!(inc->getOperand(0)==phi))&&(!(inc->getOperand(0)==phi)))
 			{
-				std::cerr << "Increment variable don't is related to loop variable" << std::endl;
+//				std::cerr << "Increment variable don't is related to loop variable" << std::endl;
 				return (min || max);
 			}
 			if(!(inc->getOperand(0)==phi))
@@ -315,7 +306,7 @@ namespace{
 				n->V = inc->getOperand(0);
 				if(!validate(n))
 				{
-					std::cerr << "NOT MONOTONIC: loop increment uses variable with unknown value" << std::endl;
+//					std::cerr << "NOT MONOTONIC: loop increment uses variable with unknown value" << std::endl;
 					del(n);
 					return false;
 				}
@@ -327,14 +318,14 @@ namespace{
 				n->V = inc->getOperand(1);
 				if(!validate(n))
 				{
-					std::cerr << "NOT MONOTONUC: loop increment uses variable with unknow value" << std::endl;
+//					std::cerr << "NOT MONOTONUC: loop increment uses variable with unknow value" << std::endl;
 					del(n);
 					return false;
 				}
 				del(n);
 			}
 		}else{
-			std::cerr << "NOT MONOTONIC: increment not found" << std::endl;
+//			std::cerr << "NOT MONOTONIC: increment not found" << std::endl;
 			return false;
 		}
 		return (min || max);
@@ -376,7 +367,7 @@ namespace{
 			}
 
 
-			std::cerr << "-------------" << std::endl;
+//			std::cerr << "-------------" << std::endl;
 			llvm::Instruction* phi = NULL;
 			llvm::Instruction* condition = NULL;
 
@@ -393,33 +384,38 @@ namespace{
 
 			if(phi==NULL)
 			{
-				std::cerr << "Phi not found" << std::endl;
+//				std::cerr << "Phi not found" << std::endl;
 				return false;
 			}
 
 			llvm::Value* min = getMin(phi);
+/*
 			if(min)
 			{
 				std::cerr << "Min: ";
 				min->dump();
 			}
+*/
+
 			llvm::Value* max = getMax(phi,condition);
+/*
 			if(max)
 			{
 				std::cerr << "Max: ";
 				max->dump();
 			}
-
+*/
 			if(isMonotonic(phi,min,max))
 			{
-				std::cerr << "Is Monotonic" << std::endl;
+//				std::cerr << "Is Monotonic" << std::endl;
 				for(idx : getArrays(L))
 				{
-					idx->dump();
+//					idx->dump();
 					Node* n = new Node();
 					n->V = &*idx;
 					if(search(n,phi))
 					{
+//						std::cerr << "Create OOB check" << std::endl;
 						createCheckArrayBounds(min,max,idx);
 					}
 					del(n);

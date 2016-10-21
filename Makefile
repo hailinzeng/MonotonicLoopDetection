@@ -14,10 +14,6 @@ run:
 	@rm -rf test/*.ll*
 	@rm -rf test/*.o*
 
-	@echo "##############"
-	@echo "TEST @:"
-	@echo "##############"
-
 	@cd test/; clang++ -O0 -w -c -emit-llvm test1.cpp -o result1.bc; opt -mem2reg < result1.bc | llvm-dis > result1.ll; clang++ -O0 -w -c -emit-llvm -Xclang -load -Xclang ../llvm/build/lib/MonotonicLoopDetection.so result1.ll; llvm-dis result1.bc -o result1.ll;
 
 

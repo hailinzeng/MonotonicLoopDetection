@@ -155,3 +155,42 @@ void test_fail_12()
 
 }
 
+void test_fail_13()
+{
+	int arr[] = {1,2,3,4,5,6,7};
+	int k = 10;
+	for (int l = 0; l<k; l++)
+	{
+		arr[l * 2 + k] = 12;
+	}
+}
+
+void test_fail_14(int arg)
+{
+	int arr[] = {1,2,3,4,5,6,7};
+
+	int k = 10;
+
+	if(arg==2) k = 3;
+
+	for (int l = 0; l<k; l++)
+	{
+		arr[l * 2 + k] = 12;
+	}
+}
+
+void test_fail_15(int arg)
+{
+	int arr[] = {1,2,3,4,5,6,7};
+	int k = foo(1);
+	for (int l = 0; l<k; l++)
+	{
+		arr[l * 2 + k] = 12;
+	}
+}
+
+
+
+
+
+
