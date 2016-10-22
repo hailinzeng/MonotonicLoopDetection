@@ -5,81 +5,87 @@ int __attribute__ ((noinline)) foo(int x)
 	return x+1;
 }
 
-//monotonic loop
-void test_sucess_1()
+int main(int argc, char* argv[])
 {
-	int arr[] = {1,2,3,4,5,6,7};
-	for (int i = 1;i < 3; i++)
-	{
-		arr[i] = i+3;
-	}
-}
 
-//monotonic loop
-void test_sucess_2()
-{
-	int g = 3;
-	int arr[] = {1,2,3,4,5,6,7};
-	for (int i = 1;i < 3; i++)
-	{
-		arr[g] = g;
-		g+=2;
-	}
-}
 
-//monotonic loop but array's index uses function parameter
-void test_fail_1(int arg)
-{
-	int z = arg;
-	int arr[] = {1,2,3,4,5,6,7};
-	for (int i = 3;i < 5; i++)
-	{
-		arr[i+z] = 3;
-	}
-}
+	auto t1 = []{
+		int arr[] = {1,2,3,4,5,6,7};
+		for (int i = 1;i < 3; i++)
+		{
+			arr[i] = i+3;
+		}
+	};
 
-//not monotonic loop, uses function parameter
-void test_fail_2(int argc)
-{
-	int arr[] = {1,2,3,4,5,6,7};
-	for (int i = 1; i < argc; i++)
-	{
-		arr[i] = i;
-	}
-}
+	t1();
 
-//monotonic loop, but array uses function result
-void test_fail_3(int argc)
-{
-	int arr[] = {1,2,3,4,5,6,7};
-	for (int i = 1; i < 3; i++)
-	{
-		arr[foo(argc+i)] = i + 1;
-	}
-}
+	auto t2 = []{
+		int g = 3;
+		int arr[] = {1,2,3,4,5,6,7};
+		for (int i = 1;i < 3; i++)
+		{
+			arr[g] = g;
+			g+=2;
+		}
+	};
 
-//cannot get the end value
-void test_fail_4()
-{
-	int arr[] = {1,2,3,4,5,6,7};
-	for (int i = 1; ; i++)
-	{
-		arr[i] = i + 1;
-	}
-}
+	t2();
 
-//cannot get the end value
-void test_fail_5()
-{
-	int arr[] = {1,2,3,4,5,6,7};
-	for (int i=0; ;)
-	{
-		arr[i] = i+1;
-	}
-}
+	auto t3 = [](int arg){
+		int z = arg;
+		int arr[] = {1,2,3,4,5,6,7};
+		for (int i = 3;i < 5; i++)
+		{
+			arr[i+z] = 3;
+		}
+	};
 
-//condition uses function parameter
-void test_fail_6(int argc)
+	t3(argc);
+
+	auto t4 = [](int arg){
+		int arr[] = {1,2,3,4,5,6,7};
+		for (int i = 1; i < arg; i++)
+		{
+			arr[i] = i;
+		}
+	};
+
+	t4(argc);
+
+	auto t5 = [](int arg){
+		int arr[] = {1,2,3,4,5,6,7};
+		for (int i = 1; i < 3; i++)
+		{
+			arr[foo(arg+i)] = i + 1;
+		}
+	};
+
+	t5(argc);
+
+/*
+
+	auto t6 = [](){
+		int arr[] = {1,2,3,4,5,6,7};
+		for (int i = 1; ; i++)
+		{
+			arr[i] = i + 1;
+		}
+	};
+
+	t6();
+
+	auto t7 = [](){
+		int arr[] = {1,2,3,4,5,6,7};
+		for (int i=0; ;)
+		{
+			arr[i] = i+1;
+		}
+	};
+
+	t7();
+*/
+/*
+void test8(int argc)
 {
 	int arr[] = {1,2,3,4,5,6,7};
 	for (int i=0; argc<5; i++)
@@ -88,7 +94,6 @@ void test_fail_6(int argc)
 	}
 }
 
-//condition uses function parameter
 void test_fail_7(int argc)
 {
 	int arr[] = {1,2,3,4,5,6,7};
@@ -98,7 +103,6 @@ void test_fail_7(int argc)
 	}
 }
 
-//start value is function parameter
 void test_fail_8(int argc)
 {
 	int arr[] = {1,2,3,4,5,6,7};
@@ -108,7 +112,6 @@ void test_fail_8(int argc)
 	}
 }
 
-//end value is not constant
 void test_fail_9(int argc)
 {
 	int arr[] = {1,2,3,4,5,6,7};
@@ -125,7 +128,6 @@ void test_fail_9(int argc)
 	}
 }
 
-//start value is not constant
 void test_fail_11(int argc)
 {
 	int arr[] = {1,2,3,4,5,6,7};
@@ -142,7 +144,6 @@ void test_fail_11(int argc)
 	}
 }
 
-//cannot get start and end values
 void test_fail_12()
 {
 	int arr[] = {1,2,3,4,5,6,7};
@@ -188,9 +189,8 @@ void test_fail_15(int arg)
 		arr[l * 2 + k] = 12;
 	}
 }
+*/
 
 
-
-
-
-
+	return 0;
+}

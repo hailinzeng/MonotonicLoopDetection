@@ -259,11 +259,8 @@ namespace{
 
 				if(min)
 				{
-					llvm::Value* args[] = {v,min};
-					builder.CreateCall(p.first,args);
-				}else{
 					llvm::Value* args[] = {v,builder.getInt32(0)};
-					builder.CreateCall(p.second,args);
+					builder.CreateCall(p.first,args);
 				}
 			}
 
@@ -278,9 +275,6 @@ namespace{
 
 				if(max)
 				{
-					llvm::Value* args[] = {v,max};
-					builder.CreateCall(p.second,args);
-				}else{
 					llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
 					builder.CreateCall(p.second,args);
 				}
