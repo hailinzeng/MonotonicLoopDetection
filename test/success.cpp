@@ -19,7 +19,6 @@ int main(int argc, char* argv[])
 	};
 	t1();
 
-
 	//it doesn't trigger the 'exit(-1)' function because will occur OOB access
 	// arr[ g ] to g >= 0 and g < sizeof(arr)
 	auto t2 = []{
@@ -45,7 +44,7 @@ int main(int argc, char* argv[])
 		}
 	};
 	t3(1);
-/*
+
 	//it doesn't trigger the 'exit(-1)' function because will occur OOB access
 	// arr[ i ] to i >= 0 and i < sizeof(arr)
 	auto t4 = [](int arg){
@@ -56,7 +55,30 @@ int main(int argc, char* argv[])
 		}
 	};
 	t4(1);
+
+/*
+	NOT MONOTONIC
+	auto t5 = [](int arg){
+		int arr[] = {1,2,3,4,5,6,7};
+		for (; arg < 10;)
+		{
+			arr[arg] = 3;
+			break;
+		}
+	};
+	t5(argc);
 */
+
+	auto t6 = [](){
+		int arr[] = {1,2,3,4,5,6,7};
+		int i = 0;
+		while (i < 6)
+		{
+			arr[i] = 3;
+			i++;
+		}
+	};
+	t6();
 
 	return 0;
 }

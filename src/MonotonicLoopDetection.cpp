@@ -407,6 +407,9 @@ namespace{
 //					idx->dump();
 					Node* n = new Node();
 					n->V = &*idx;
+					llvm::LLVMContext& C = idx->getContext();
+					llvm::MDNode* N = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonic.loop"));
+					idx->setMetadata("SAFE",N);
 					if(search(n,phi))
 					{
 //						std::cerr << "Create OOB check" << std::endl;
