@@ -35,7 +35,7 @@ namespace{
 	{
 		if(n==NULL) return;
 		else {
-			for(s : n->son) del(s);
+			for(auto s : n->son) del(s);
 			delete n;
 		}
 	}
@@ -86,7 +86,7 @@ namespace{
 			}
 		}
 
-		for(s : n->son)
+		for(auto s : n->son)
 		{
 			if((n->father!=NULL)&&(s->V == n->father->V))
 			{
@@ -116,7 +116,7 @@ namespace{
 				}
 			}
 		}
-		for(s : n->son)
+		for(auto s : n->son)
 		{
 			if((n->father!=NULL)&&(s->V == n->father->V)){
 				continue;
@@ -149,10 +149,6 @@ namespace{
 		return NULL;
 	}
 
-	std::pair<llvm::Value*,llvm::Value*> getArrayBounds()
-	{
-		std::pair<llvm::Value*,llvm::Value*> p;
-	}
 
 	llvm::Function* exit_prototype(llvm::Module* M)
 	{
@@ -246,7 +242,7 @@ namespace{
 			//llvm::Value* size = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),a->getNumElements());
 			//llvm::Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),0);
 
-			llvm::Module* m = ptr->getParent()->getParent()->getParent();
+//			llvm::Module* m = ptr->getParent()->getParent()->getParent();
 
 			if(1)
 			{
@@ -341,6 +337,26 @@ namespace{
 		return vec;
 	}
 
+	std::vector<llvm::Instruction*> getLoadStore(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
+	{
+		std::vector<llvm::Instruction*> vec;
+		for(llvm::BasicBlock* bb : L->getBlocks())
+		{
+			for(llvm::Instruction& I : *bb)
+			{
+				if (auto* op = llvm::dyn_cast<llvm::StoreInst>(&I))
+				{
+					if(op->getPointerOperand()==ptr) vec.push_back(op);
+				}
+				else if (auto* op = llvm::dyn_cast<llvm::LoadInst>(&I))
+				{
+					if(op->getOperand(0)==ptr) vec.push_back(op);
+				}
+			}
+		}
+		return vec;
+	}
+
 	bool checkFunctionCreated = false;
 
 	struct MLD: llvm::LoopPass
@@ -402,7 +418,7 @@ namespace{
 			if(isMonotonic(phi,min,max))
 			{
 //				std::cerr << "Is Monotonic" << std::endl;
-				for(idx : getArrays(L))
+				for(llvm::GetElementPtrInst* idx : getArrays(L))
 				{
 //					idx->dump();
 					Node* n = new Node();
@@ -410,6 +426,7 @@ namespace{
 					llvm::LLVMContext& C = idx->getContext();
 					llvm::MDNode* N = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonic.loop"));
 					idx->setMetadata("SAFE",N);
+					for(llvm::Instruction* ls : getLoadStore(L,idx)) ls->setMetadata("SAFE",N);
 					if(search(n,phi))
 					{
 //						std::cerr << "Create OOB check" << std::endl;
@@ -418,6 +435,7 @@ namespace{
 					del(n);
 				}
 			}
+			return true;
 		}
 	};
 }
