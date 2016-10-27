@@ -425,12 +425,12 @@ namespace{
 					n->V = &*idx;
 					llvm::LLVMContext& C = idx->getContext();
 					llvm::MDNode* N = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonic.loop"));
-					idx->setMetadata("SAFE",N);
-					for(llvm::Instruction* ls : getLoadStore(L,idx)) ls->setMetadata("SAFE",N);
 					if(search(n,phi))
 					{
 //						std::cerr << "Create OOB check" << std::endl;
 						createCheckArrayBounds(min,max,idx);
+						idx->setMetadata("SAFE",N);
+						for(llvm::Instruction* ls : getLoadStore(L,idx)) ls->setMetadata("SAFE",N);
 					}
 					del(n);
 				}
