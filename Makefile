@@ -17,7 +17,7 @@ run:
 
 	@#cd test/; clang++ -std=c++11 -O0 -w -c -emit-llvm success.cpp -o success.bc; opt -mem2reg < success.bc | llvm-dis > success.ll; clang++ -std=c++11 -O0 -w -c -emit-llvm -Xclang -load -Xclang ../llvm/build/lib/MonotonicLoopDetection.so success.ll; llvm-dis success.bc -o success.ll;
 
-	@cd llvm/test/MLD/; ../../build/bin/llvm-lit -v llvm/test/MLD/test.ll
+	@cd llvm/test/MLD/; ../../build/bin/llvm-lit -v test.ll
 
 clean:
 	@rm -rf test/*.ll test/*.bc
