@@ -17,6 +17,9 @@ void __attribute__ ((noinline)) bar()
 
 int main(int argc, char* argv[])
 {
+
+	bar();
+
 	//it doesn't trigger the 'exit(-1)' function because will occur OOB access
 	// arr[ i ] to i >= 0 and i < sizeof(arr)
 	auto t1 = []{

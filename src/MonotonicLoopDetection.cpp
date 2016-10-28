@@ -158,6 +158,10 @@ namespace{
 		return exit_f;
 	}
 
+	llvm::Function* printf_function = NULL;
+	llvm::Value* msg = NULL;
+	llvm::Value* err_msg = NULL;
+
 	llvm::Function* createMax(llvm::Module* M, llvm::Function* exit_f)
 	{
 		llvm::LLVMContext& Ctx = M->getContext();
@@ -185,6 +189,7 @@ namespace{
 
 		llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
 
+		builder.CreateCall(printf_function,err_msg);
 		builder.CreateCall(exit_f,errval);
 		builder.CreateRet(less);
 
@@ -219,6 +224,7 @@ namespace{
 
 		llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
 
+		builder.CreateCall(printf_function,err_msg);
 		builder.CreateCall(exit_f,errval);
 		builder.CreateRet(greater);
 
@@ -318,6 +324,13 @@ namespace{
 //			std::cerr << "NOT MONOTONIC: increment not found" << std::endl;
 			return false;
 		}
+
+		if(min||max)
+		{
+			llvm::IRBuilder<> builder(&*phi->getParent()->getParent()->getEntryBlock().getFirstInsertionPt());
+			builder.CreateCall(printf_function, msg);
+		}
+
 		return (min || max);
 	}
 
@@ -358,6 +371,13 @@ namespace{
 	}
 
 	bool checkFunctionCreated = false;
+	bool printfFunctionCreated = false;
+
+	llvm::Function* printf_prototype(llvm::Module* M) {
+		llvm::FunctionType* printf_type =  llvm::TypeBuilder<int(char *, ...), false>::get(M->getContext());
+		llvm::Function* func = llvm::cast<llvm::Function>(M->getOrInsertFunction("printf", printf_type,  llvm::AttributeSet().addAttribute(M->getContext(), 1U, llvm::Attribute::NoAlias)));
+		return func;
+	}
 
 	struct MLD: llvm::LoopPass
 	{
@@ -368,6 +388,15 @@ namespace{
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
+
+			if(!printfFunctionCreated)
+			{
+				llvm::IRBuilder<> builder(L->getHeader());
+				msg = builder.CreateGlobalStringPtr("Monotonic loop detected!\n");
+				err_msg = builder.CreateGlobalStringPtr("Assertion failed!\n");
+				printf_function = printf_prototype(L->getHeader()->getParent()->getParent());
+				printfFunctionCreated = true;
+			}
 
 			if(!checkFunctionCreated)
 			{
