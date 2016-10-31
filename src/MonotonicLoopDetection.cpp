@@ -239,52 +239,102 @@ namespace{
 		p.second = createMax(M,exit_f);
 	}
 
-	void createCheckArrayBounds(llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr)
+
+	void createCheckArrayBounds(llvm::Loop* L, llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr)
 	{
 		if(llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0)))
 		{
 			llvm::PointerType* _p = arr->getType();
 			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
-			//llvm::Value* size = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),a->getNumElements());
-			//llvm::Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()),0);
 
-//			llvm::Module* m = ptr->getParent()->getParent()->getParent();
-
-			if(1)
+			auto getInstBeforeLoop = [](llvm::Loop* L)
 			{
-				llvm::IRBuilder<> builder(ptr);
-				llvm::Value* v = NULL;
-				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+				for(llvm::Instruction& i : L->getLoopPreheader()->getInstList())
 				{
-					v = se->getOperand(0);
+					if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&i)) return op;
 				}
+			};
 
-				if(min)
-				{
-					llvm::Value* args[] = {v,builder.getInt32(0)};
-					builder.CreateCall(p.first,args);
-				}
+
+			if(min && max)
+			{
+				std::cerr << "Min and Max" << std::endl;
+				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::Value* args1[] = {min,builder.getInt32(0)};
+				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
+				builder.CreateCall(p.first,args1);
+				builder.CreateCall(p.second,args2);
 			}
-
-			if(1)
+			else if(min && !max)
 			{
-				llvm::IRBuilder<> builder(ptr);
+				std::cerr << "Only Min" << std::endl;
+				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::Value* args1[] = {min,builder.getInt32(0)};
+				builder.CreateCall(p.first,args1);
+
+				builder.SetInsertPoint(ptr);
 				llvm::Value* v = NULL;
 				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 				{
 					v = se->getOperand(0);
 				}
+				llvm::Value* args2[] = {v,builder.getInt32(a->getNumElements())};
+				builder.CreateCall(p.second,args2);
+			}
+			else if(!min && max)
+			{
+				std::cerr << "Only Max" << std::endl;
+				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
+				builder.CreateCall(p.second,args2);
 
-				if(max)
+				builder.SetInsertPoint(ptr);
+				llvm::Value* v = NULL;
+				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 				{
-					llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
-					builder.CreateCall(p.second,args);
+					v = se->getOperand(0);
 				}
+				llvm::Value* args1[] = {v,builder.getInt32(0)};
+				builder.CreateCall(p.first,args1);
 
+			}
+			else if(!min && !max)
+			{
+				std::cerr << "None" << std::endl;
+				if(1)
+				{
+					llvm::IRBuilder<> builder(ptr);
+					llvm::Value* v = NULL;
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					{
+						v = se->getOperand(0);
+					}
+					if(min)
+					{
+						llvm::Value* args[] = {v,builder.getInt32(0)};
+						builder.CreateCall(p.first,args);
+					}
+				}
+				if(1)
+				{
+					llvm::IRBuilder<> builder(ptr);
+					llvm::Value* v = NULL;
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					{
+						v = se->getOperand(0);
+					}
+
+					if(max)
+					{
+						llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
+						builder.CreateCall(p.second,args);
+					}
+				}
 			}
 
 		}
 	}
+
 
 	bool isMonotonic(llvm::Instruction* phi, llvm::Value* min, llvm::Value* max)
 	{
@@ -457,7 +507,7 @@ namespace{
 					if(search(n,phi))
 					{
 //						std::cerr << "Create OOB check" << std::endl;
-						createCheckArrayBounds(min,max,idx);
+						createCheckArrayBounds(L,min,max,idx);
 						idx->setMetadata("SAFE",N);
 						for(llvm::Instruction* ls : getLoadStore(L,idx)) ls->setMetadata("SAFE",N);
 					}
