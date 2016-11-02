@@ -1,10 +1,11 @@
 
 int main(int argc, char* argv[])
 {
-	int a[] = {1,2,3,4,5,6,7};
-	for (int i = 1;i < 3; i++)
+	int a[100];
+	for (int i = 1;i < 100; i--)
 	{
-		a[i] = -i * -i;
+		if(i < 25) a[i] = i+1;
+		else a[125-i] = 3;
 	}
 
 	return 0;

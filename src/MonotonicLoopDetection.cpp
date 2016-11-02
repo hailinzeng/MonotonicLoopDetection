@@ -109,6 +109,11 @@ namespace{
 		return NULL;
 	}
 
+	llvm::GetElementPtrInst* isGetElementPtrInst(llvm::Instruction* I)
+	{
+		return llvm::dyn_cast<llvm::GetElementPtrInst>(I);
+	}
+
 	Direction getDirection(llvm::PHINode* phi)
 	{
        	        if(llvm::Instruction* ii = llvm::dyn_cast<llvm::Instruction>(phi->getOperand(1)))
@@ -149,6 +154,7 @@ namespace{
 
 	Direction getDirection(llvm::PHINode* phi, llvm::Instruction* I)
 	{
+		if(auto p = isPHI(I)) return getDirection(p);
 		llvm::Value* op1;
 		llvm::Value* op2;
 		if(I==NULL) return Direction::Unknown;
@@ -194,62 +200,9 @@ namespace{
 			else if(dir1 == Direction::Decreasing && dir2 == Direction::Decreasing) return getDirection(phi);
 			return dir1 && dir2;
 		}
-		else if(I->getOpcode()==llvm::Instruction::SDiv)
-		{
-			
-		}
 		return Direction::Unknown;
 	}
 
-/*
-	Direction getDirection(llvm::Instruction* I)
-	{
-		if(llvm::PHINode* phi = llvm::dyn_cast<llvm::PHINode>(I)) return getDirection(phi);
-
-		if(I->getOpcode()==llvm::Instruction::Add)
-		{
-			if(isConstantInt(I->getOperand(0)) && isPHI(I->getOperand(1))) return getDirection(isPHI(I->getOperand(1)));
-			else if((isPHI(I->getOperand(0))) && isConstantInt(I->getOperand(1))) return getDirection(isPHI(I->getOperand(0)));
-		}
-		else if(I->getOpcode()==llvm::Instruction::Sub)
-		{
-			if(isConstantInt(I->getOperand(0)) && isPHI(I->getOperand(1))) return Direction::Decreasing;
-			else if((isPHI(I->getOperand(0))) && isConstantInt(I->getOperand(1))) return getDirection(isPHI(I->getOperand(0)));
-		}
-		else if(I->getOpcode()==llvm::Instruction::Mul)
-		{
-			if(isConstantInt(I->getOperand(0)) && isPHI(I->getOperand(1)))
-			{
-				auto ci = isConstantInt(I->getOperand(0));
-				if(*(ci->getValue().getRawData())==0) return Direction::Invariant;
-				else return getDirection(isPHI(I->getOperand(1)));
-			}
-			else if((isPHI(I->getOperand(0))) && isConstantInt(I->getOperand(1)))
-			{
-				auto ci = isConstantInt(I->getOperand(1));
-				if(*(ci->getValue().getRawData())==0) return Direction::Invariant;
-				else return getDirection(isPHI(I->getOperand(0)));
-			}
-		}
-		else if(I->getOpcode()==llvm::Instruction::SDiv)
-		{
-			if(isConstantInt(I->getOperand(0)) && isPHI(I->getOperand(1)))
-			{
-				auto ci = isConstantInt(I->getOperand(0));
-				if(*(ci->getValue().getRawData())==0) return Direction::Invariant;
-				else return !getDirection(isPHI(I->getOperand(1)));
-			}
-			else if((isPHI(I->getOperand(0))) && isConstantInt(I->getOperand(1)))
-			{
-				auto ci = isConstantInt(I->getOperand(1));
-				if(*(ci->getValue().getRawData())==0) return Direction::Invariant;
-				else return getDirection(isPHI(I->getOperand(0)));
-			}
-		}
-
-		return Direction::Unknown;
-	}
-*/
 	llvm::BasicBlock* getLoopBody(llvm::Loop* L)
 	{
 	        for(llvm::Instruction& I : *L->getHeader())
@@ -277,8 +230,29 @@ namespace{
 		}
 	}
 
-	bool isLoopMonotonic(llvm::Instruction* I, Direction loopDirection)
-	{}
+	llvm::StoreInst* getStore(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
+	{
+		for(auto U : ptr->users())
+		{
+			if (llvm::StoreInst* st = llvm::dyn_cast<llvm::StoreInst>(U))
+			{
+				if(L->contains(st)) return st;
+			}
+		}
+		return NULL;
+	}
+
+	llvm::LoadInst* getLoad(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
+	{
+		for(auto U : ptr->users())
+		{
+			if (llvm::LoadInst* ld = llvm::dyn_cast<llvm::LoadInst>(U))
+			{
+				if(L->contains(ld)) return ld;
+			}
+		}
+		return NULL;
+	}
 
 	struct MLD: llvm::LoopPass
 	{
@@ -293,25 +267,36 @@ namespace{
 			llvm::ICmpInst* cmp = getLoopCondition(L);
 			Direction loopDir = getDirection(phi);
 
-			std::cerr << "Loop is: " << loopDir << std::endl;
-
 			std::vector<llvm::BasicBlock*> blocks;
 			blocks.push_back(getLoopBody(L));
 			getBlocks(blocks,getLoopBody(L));
 
+			llvm::LLVMContext& C = llvm::getGlobalContext();
+			llvm::MDNode* MTN = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonicity"));
+
 			for(llvm::BasicBlock* bb : blocks)
 			{
-				for(llvm::Instruction& i : *bb)
+				for(llvm::Instruction& I : *bb)
 				{
-					std::cerr << getDirection(phi,&i) << std::endl;
-					i.dump();
-/*
-					if(getDirection(&i) == !loopDir)
+					if(auto ge = isGetElementPtrInst(&I))
 					{
-						std::cerr << getDirection(&i) << " ";
-						i.dump();
+						auto idx = isInstruction(ge->getOperand(2));
+						idx = isInstruction(idx->getOperand(0));
+						if(getDirection(phi,idx) == loopDir)
+						{
+							if(auto st = getStore(L,ge))
+							{
+								if(getDirection(phi,isInstruction(st->getOperand(0))) != loopDir)
+								{
+									continue;
+								}
+								st->setMetadata("monotonic.safe",MTN);
+								isInstruction(st->getOperand(0))->setMetadata("monotonic.safe",MTN);
+							}
+							ge->setMetadata("monotonic.safe",MTN);
+							if(auto ld = getLoad(L,ge)) ld->setMetadata("monotonic.safe",MTN);
+						}
 					}
-*/
 				}
 			}
 
