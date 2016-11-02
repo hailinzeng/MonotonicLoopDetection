@@ -4,7 +4,7 @@ all:
 	@cp src/* llvm/lib/Transforms/MLD/
 	@cp -r test/MLD llvm/test/
 	@mkdir -p llvm/build
-	@cd llvm/build; make -j8; make;
+	@cd llvm/build; make -j8;
 
 start_llvm:
 	@mkdir -p llvm/build

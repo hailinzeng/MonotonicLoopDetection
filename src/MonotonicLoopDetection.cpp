@@ -32,6 +32,24 @@ namespace{
 		return d;
 	}
 
+	Direction operator&&(const Direction& ld, const Direction& rd)
+	{
+		if(ld == Direction::Unknown || rd == Direction::Unknown) return Direction::Unknown;
+		else if(ld == Direction::Invariant && rd == Direction::Invariant) return Direction::Invariant;
+		else if(ld == rd) return ld;
+		else if(ld == Direction::Invariant) return rd;
+		else if(rd == Direction::Invariant) return ld;
+		return Direction::Unknown;
+	}
+
+	std::ostream& operator<<(std::ostream& os, const Direction& dir) {
+		if(dir==Direction::Increasing) os << "Increasing";
+		else if(dir==Direction::Decreasing) os << "Decreasing";
+		else if(dir==Direction::Invariant) os << "Invariant";
+		else if(dir==Direction::Unknown) os << "Unknown";
+		return os;
+	}
+
 	llvm::PHINode* getLoopVar(llvm::Loop* L)
 	{
 		for(llvm::Instruction& I : *L->getHeader())
@@ -61,6 +79,36 @@ namespace{
 		return llvm::dyn_cast<llvm::ConstantInt>(V);
 	}
 
+	llvm::Argument* isArgument(llvm::Value* V)
+	{
+		return llvm::dyn_cast<llvm::Argument>(V);
+	}
+
+	llvm::BinaryOperator* isBinaryOperator(llvm::Value* V)
+	{
+		return llvm::dyn_cast<llvm::BinaryOperator>(V);
+	}
+
+
+	llvm::Instruction* isInstruction(llvm::Value* V)
+	{
+		return llvm::dyn_cast<llvm::Instruction>(V);
+	}
+
+	llvm::PHINode* isPHI(llvm::Value* V)
+	{
+		return llvm::dyn_cast<llvm::PHINode>(V);
+	}
+
+	llvm::Instruction* isTurningNegative(llvm::Instruction* I)
+	{
+		if(I->getOpcode()==llvm::Instruction::Sub)
+		{
+			if(isConstantInt(I->getOperand(0))) return I;
+		}
+		return NULL;
+	}
+
 	Direction getDirection(llvm::PHINode* phi)
 	{
        	        if(llvm::Instruction* ii = llvm::dyn_cast<llvm::Instruction>(phi->getOperand(1)))
@@ -84,51 +132,124 @@ namespace{
                 return Direction::Unknown;
 	}
 
+
+	bool isInvariantInsideLoop(llvm::Loop* L, llvm::Value* V)
+	{
+		if(isConstantInt(V)) return true;
+		for(auto U : V->users())
+		{
+			if (llvm::StoreInst* st = llvm::dyn_cast<llvm::StoreInst>(U))
+			{
+				if(L->contains(st)) return false;
+			}
+		}
+		return true;
+	}
+
+
+	Direction getDirection(llvm::PHINode* phi, llvm::Instruction* I)
+	{
+		llvm::Value* op1;
+		llvm::Value* op2;
+		if(I==NULL) return Direction::Unknown;
+		else if(isBinaryOperator(I))
+		{
+			op1 = I->getOperand(0);
+			op2 = I->getOperand(1);
+		}
+		else return Direction::Unknown;
+
+		Direction dir1, dir2;
+		if(isConstantInt(op1)) dir1 = Direction::Invariant;
+		else if(isArgument(op1)) dir1 = Direction::Unknown;
+		else if(isPHI(op1)) dir1 = getDirection(isPHI(op1));
+		else if(isBinaryOperator(op1)) dir1 = getDirection(phi, isBinaryOperator(op1));
+
+		if(isConstantInt(op2)) dir2 = Direction::Invariant;
+		else if(isArgument(op2)) dir2 = Direction::Unknown;
+		else if(isPHI(op2)) dir2 = getDirection(isPHI(op2));
+		else if(isBinaryOperator(op2)) dir2 = getDirection(phi, isBinaryOperator(op2));
+
+		if(I->getOpcode()==llvm::Instruction::Add)
+		{
+			return dir1 && dir2;
+		}
+		else if(I->getOpcode()==llvm::Instruction::Sub)
+		{
+			if(isConstantInt(op1)) return !dir2;
+			return dir1;
+		}
+		else if(I->getOpcode()==llvm::Instruction::Mul)
+		{
+			if(auto ci = isConstantInt(op1))
+			{
+				if(ci->getValue().isNegative()) return !dir2;
+			}
+			else if(auto ci = isConstantInt(op2))
+			{
+				if(ci->getValue().isNegative()) return !dir1;
+			}
+			else if(dir1 == Direction::Decreasing && dir2 != Direction::Decreasing) return !getDirection(phi);
+			else if(dir1 != Direction::Decreasing && dir2 == Direction::Decreasing) return !getDirection(phi);
+			else if(dir1 == Direction::Decreasing && dir2 == Direction::Decreasing) return getDirection(phi);
+			return dir1 && dir2;
+		}
+		else if(I->getOpcode()==llvm::Instruction::SDiv)
+		{
+			
+		}
+		return Direction::Unknown;
+	}
+
+/*
 	Direction getDirection(llvm::Instruction* I)
 	{
 		if(llvm::PHINode* phi = llvm::dyn_cast<llvm::PHINode>(I)) return getDirection(phi);
 
 		if(I->getOpcode()==llvm::Instruction::Add)
 		{
-			if((isConstantInt(I->getOperand(1)))&&(llvm::dyn_cast<llvm::PHINode>(I->getOperand(0))))
-			{
-				auto ci = isConstantInt(I->getOperand(1));
-				if(ci->getValue().isNegative()) return Direction::Decreasing;
-				else if(*ci->getValue().getRawData() == 0) return Direction::Invariant;
-				else if(*ci->getValue().getRawData() > 0) return Direction::Increasing;
-			}
+			if(isConstantInt(I->getOperand(0)) && isPHI(I->getOperand(1))) return getDirection(isPHI(I->getOperand(1)));
+			else if((isPHI(I->getOperand(0))) && isConstantInt(I->getOperand(1))) return getDirection(isPHI(I->getOperand(0)));
 		}
 		else if(I->getOpcode()==llvm::Instruction::Sub)
 		{
-			if(auto ci = isConstantInt(I->getOperand(1)))
-			{
-				if(ci->getValue().isNegative()) return Direction::Increasing;
-				else if(*ci->getValue().getRawData() == 0) return Direction::Invariant;
-				else if(*ci->getValue().getRawData() > 0) return Direction::Decreasing;
-			}
+			if(isConstantInt(I->getOperand(0)) && isPHI(I->getOperand(1))) return Direction::Decreasing;
+			else if((isPHI(I->getOperand(0))) && isConstantInt(I->getOperand(1))) return getDirection(isPHI(I->getOperand(0)));
 		}
 		else if(I->getOpcode()==llvm::Instruction::Mul)
 		{
-			if(auto ci = isConstantInt(I->getOperand(1)))
+			if(isConstantInt(I->getOperand(0)) && isPHI(I->getOperand(1)))
 			{
-				if(ci->getValue().isNegative()) return Direction::Decreasing;
-				else if(*ci->getValue().getRawData() == 0) return Direction::Invariant;
-				else if(*ci->getValue().getRawData() > 0) return Direction::Increasing;
+				auto ci = isConstantInt(I->getOperand(0));
+				if(*(ci->getValue().getRawData())==0) return Direction::Invariant;
+				else return getDirection(isPHI(I->getOperand(1)));
+			}
+			else if((isPHI(I->getOperand(0))) && isConstantInt(I->getOperand(1)))
+			{
+				auto ci = isConstantInt(I->getOperand(1));
+				if(*(ci->getValue().getRawData())==0) return Direction::Invariant;
+				else return getDirection(isPHI(I->getOperand(0)));
 			}
 		}
 		else if(I->getOpcode()==llvm::Instruction::SDiv)
 		{
-			if(auto ci = isConstantInt(I->getOperand(1)))
+			if(isConstantInt(I->getOperand(0)) && isPHI(I->getOperand(1)))
 			{
-				if(ci->getValue().isNegative()) return Direction::Increasing;
-				else if(*ci->getValue().getRawData() == 0) return Direction::Invariant;
-				else if(*ci->getValue().getRawData() > 0) return Direction::Decreasing;
+				auto ci = isConstantInt(I->getOperand(0));
+				if(*(ci->getValue().getRawData())==0) return Direction::Invariant;
+				else return !getDirection(isPHI(I->getOperand(1)));
+			}
+			else if((isPHI(I->getOperand(0))) && isConstantInt(I->getOperand(1)))
+			{
+				auto ci = isConstantInt(I->getOperand(1));
+				if(*(ci->getValue().getRawData())==0) return Direction::Invariant;
+				else return getDirection(isPHI(I->getOperand(0)));
 			}
 		}
 
 		return Direction::Unknown;
 	}
-
+*/
 	llvm::BasicBlock* getLoopBody(llvm::Loop* L)
 	{
 	        for(llvm::Instruction& I : *L->getHeader())
@@ -156,18 +277,6 @@ namespace{
 		}
 	}
 
-	bool isInvariantInsideLoop(llvm::Loop* L, llvm::Value* V)
-	{
-		for(auto U : V->users())
-		{
-			if (llvm::StoreInst* st = llvm::dyn_cast<llvm::StoreInst>(U))
-			{
-				if(L->contains(st)) return false;
-			}
-		}
-		return true;
-	}
-
 	bool isLoopMonotonic(llvm::Instruction* I, Direction loopDirection)
 	{}
 
@@ -184,8 +293,7 @@ namespace{
 			llvm::ICmpInst* cmp = getLoopCondition(L);
 			Direction loopDir = getDirection(phi);
 
-			if(loopDir==Direction::Increasing) std::cerr << "INCREASING" << std::endl;
-			if(loopDir==Direction::Decreasing) std::cerr << "DECREASING" << std::endl;
+			std::cerr << "Loop is: " << loopDir << std::endl;
 
 			std::vector<llvm::BasicBlock*> blocks;
 			blocks.push_back(getLoopBody(L));
@@ -195,10 +303,15 @@ namespace{
 			{
 				for(llvm::Instruction& i : *bb)
 				{
+					std::cerr << getDirection(phi,&i) << std::endl;
+					i.dump();
+/*
 					if(getDirection(&i) == !loopDir)
 					{
+						std::cerr << getDirection(&i) << " ";
 						i.dump();
 					}
+*/
 				}
 			}
 
