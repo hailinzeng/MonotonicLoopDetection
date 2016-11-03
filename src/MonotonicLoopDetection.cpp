@@ -46,9 +46,10 @@ namespace{
 		if(dir==Direction::Increasing) os << "Increasing";
 		else if(dir==Direction::Decreasing) os << "Decreasing";
 		else if(dir==Direction::Invariant) os << "Invariant";
-		else if(dir==Direction::Unknown) os << "Unknown";
+		else os << "Unknown";
 		return os;
 	}
+
 
 	llvm::PHINode* getLoopVar(llvm::Loop* L)
 	{
@@ -100,22 +101,30 @@ namespace{
 		return llvm::dyn_cast<llvm::PHINode>(V);
 	}
 
-	llvm::Instruction* isTurningNegative(llvm::Instruction* I)
+
+	llvm::GetElementPtrInst* isGetElementPtrInst(llvm::Value* V)
 	{
-		if(I->getOpcode()==llvm::Instruction::Sub)
-		{
-			if(isConstantInt(I->getOperand(0))) return I;
-		}
-		return NULL;
+		return llvm::dyn_cast<llvm::GetElementPtrInst>(V);
 	}
 
-	llvm::GetElementPtrInst* isGetElementPtrInst(llvm::Instruction* I)
+	llvm::ICmpInst* isICmpInst(llvm::Value* V)
 	{
-		return llvm::dyn_cast<llvm::GetElementPtrInst>(I);
+		return llvm::dyn_cast<llvm::ICmpInst>(V);
+	}
+
+	llvm::LoadInst* isLoadInst(llvm::Value* V)
+	{
+		return llvm::dyn_cast<llvm::LoadInst>(V);
+	}
+
+	llvm::SExtInst* isSExtInst(llvm::Value* V)
+	{
+		return llvm::dyn_cast<llvm::SExtInst>(V);
 	}
 
 	Direction getDirection(llvm::PHINode* phi)
 	{
+		if(phi->getNumOperands()==1) return getDirection(isPHI(phi->getOperand(0)));
        	        if(llvm::Instruction* ii = llvm::dyn_cast<llvm::Instruction>(phi->getOperand(1)))
                 {
                	        if(ii->getOpcode()==llvm::Instruction::Add)
@@ -129,26 +138,12 @@ namespace{
                                 else if((isConstantInt(ii->getOperand(0)))&&(ii->getOperand(1)==phi))
                                 {
                                        	if(isConstantInt(ii->getOperand(0))->getValue().isNegative()) return Direction::Decreasing;
-                                        else if(*(isConstantInt(ii->getOperand(0))->getValue().getRawData())<0) return Direction::Increasing;
+                                        else if(*(isConstantInt(ii->getOperand(0))->getValue().getRawData())>0) return Direction::Increasing;
                                         else return Direction::Invariant;
                                 }
                          }
                 }
                 return Direction::Unknown;
-	}
-
-
-	bool isInvariantInsideLoop(llvm::Loop* L, llvm::Value* V)
-	{
-		if(isConstantInt(V)) return true;
-		for(auto U : V->users())
-		{
-			if (llvm::StoreInst* st = llvm::dyn_cast<llvm::StoreInst>(U))
-			{
-				if(L->contains(st)) return false;
-			}
-		}
-		return true;
 	}
 
 
@@ -163,16 +158,32 @@ namespace{
 			op1 = I->getOperand(0);
 			op2 = I->getOperand(1);
 		}
-		else return Direction::Unknown;
+		else if(auto ld = isLoadInst(I))
+		{
+			return getDirection(phi,isInstruction(ld->getOperand(0)));
+		}
+		else if(auto ge = isGetElementPtrInst(I))
+		{
+			return getDirection(phi,isInstruction(ge->getOperand(2)));
+		}
+		else if(auto sext = isSExtInst(I))
+		{
+			return getDirection(phi,isInstruction(sext->getOperand(0)));
+		}
+		else{
+			return Direction::Unknown;
+		}
 
 		Direction dir1, dir2;
 		if(isConstantInt(op1)) dir1 = Direction::Invariant;
 		else if(isArgument(op1)) dir1 = Direction::Unknown;
+		else if(isLoadInst(op1)) dir1 = getDirection(phi,isInstruction(op1));
 		else if(isPHI(op1)) dir1 = getDirection(isPHI(op1));
 		else if(isBinaryOperator(op1)) dir1 = getDirection(phi, isBinaryOperator(op1));
 
 		if(isConstantInt(op2)) dir2 = Direction::Invariant;
 		else if(isArgument(op2)) dir2 = Direction::Unknown;
+		else if(isLoadInst(op2)) dir2 = getDirection(phi,isInstruction(op2));
 		else if(isPHI(op2)) dir2 = getDirection(isPHI(op2));
 		else if(isBinaryOperator(op2)) dir2 = getDirection(phi, isBinaryOperator(op2));
 
@@ -207,6 +218,7 @@ namespace{
 	{
 	        for(llvm::Instruction& I : *L->getHeader())
         	        if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&I)) return llvm::dyn_cast<llvm::BasicBlock>(op->getOperand(2));
+		return NULL;
 	}
 
 	void getBlocks(std::vector<llvm::BasicBlock*>& vec, llvm::BasicBlock* bb)
@@ -254,6 +266,219 @@ namespace{
 		return NULL;
 	}
 
+
+	llvm::Value* getMax(llvm::Instruction* phi, llvm::Instruction* cmp)
+	{
+		if((cmp && phi)&&(isICmpInst(cmp)))
+		{
+			if(cmp->getOperand(0)==phi) return cmp->getOperand(1);
+			else if(cmp->getOperand(1)==phi) return cmp->getOperand(0);
+		}
+		return NULL;
+	}
+
+	llvm::Value* getMin(llvm::Instruction* phi)
+	{
+		if(llvm::dyn_cast<llvm::PHINode>(phi))
+		{
+			return phi->getOperand(0);
+		}
+		return NULL;
+	}
+
+
+	llvm::Function* exit_prototype(llvm::Module* M)
+	{
+		llvm::LLVMContext& Ctx = M->getContext();
+		llvm::Constant* c = M->getOrInsertFunction("exit", llvm::Type::getVoidTy(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
+		llvm::Function* exit_f = llvm::cast<llvm::Function>(c);
+		return exit_f;
+	}
+
+	llvm::Function* printf_function = NULL;
+	llvm::Value* msg = NULL;
+	llvm::Value* err_msg = NULL;
+
+	llvm::Function* createMax(llvm::Module* M, llvm::Function* exit_f)
+	{
+		llvm::LLVMContext& Ctx = M->getContext();
+		llvm::Constant* c = M->getOrInsertFunction("__check_array_max", llvm::Type::getInt1Ty(Ctx), llvm::Type::getInt32Ty(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
+		llvm::Function* max_f = llvm::cast<llvm::Function>(c);
+
+		llvm::Function::arg_iterator args = max_f->arg_begin();
+		llvm::Value* idx = &*args++;
+		idx->setName("idx");
+		llvm::Value* mx = &*args++;
+		mx->setName("mx");
+
+		llvm::BasicBlock* entry = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", max_f);
+		llvm::BasicBlock* ret = llvm::BasicBlock::Create(llvm::getGlobalContext(), "return", max_f);
+		llvm::BasicBlock* cond_false = llvm::BasicBlock::Create(llvm::getGlobalContext(), "cond_false", max_f);
+
+		llvm::IRBuilder<> builder(entry);
+
+		llvm::Value* less = builder.CreateICmpSLT(idx, mx, "tmp");
+
+		builder.CreateCondBr(less, ret, cond_false);
+		builder.SetInsertPoint(ret);
+		builder.CreateRet(less);
+		builder.SetInsertPoint(cond_false);
+
+		llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
+
+		builder.CreateCall(printf_function,err_msg);
+		builder.CreateCall(exit_f,errval);
+		builder.CreateRet(less);
+
+		return max_f;
+	}
+
+
+	llvm::Function* createMin(llvm::Module* M, llvm::Function* exit_f)
+	{
+		llvm::LLVMContext& Ctx = M->getContext();
+		llvm::Constant* c = M->getOrInsertFunction("__check_array_min", llvm::Type::getInt1Ty(Ctx), llvm::Type::getInt32Ty(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
+		llvm::Function* min_f = llvm::cast<llvm::Function>(c);
+
+		llvm::Function::arg_iterator args = min_f->arg_begin();
+		llvm::Value* idx = &*args++;
+		idx->setName("idx");
+		llvm::Value* mn = &*args++;
+		mn->setName("mn");
+
+		llvm::BasicBlock* entry = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", min_f);
+		llvm::BasicBlock* ret = llvm::BasicBlock::Create(llvm::getGlobalContext(), "return", min_f);
+		llvm::BasicBlock* cond_false = llvm::BasicBlock::Create(llvm::getGlobalContext(), "cond_false", min_f);
+
+		llvm::IRBuilder<> builder(entry);
+
+		llvm::Value* greater = builder.CreateICmpSGE(idx, mn, "tmp");
+
+		builder.CreateCondBr(greater, ret, cond_false);
+		builder.SetInsertPoint(ret);
+		builder.CreateRet(greater);
+		builder.SetInsertPoint(cond_false);
+
+		llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
+
+		builder.CreateCall(printf_function,err_msg);
+		builder.CreateCall(exit_f,errval);
+		builder.CreateRet(greater);
+
+		return min_f;
+	}
+
+	std::pair<llvm::Function*,llvm::Function*> p;
+
+	void checkArrayPrototype(llvm::Module* M, llvm::Function* exit_f)
+	{
+		p.first = createMin(M,exit_f);
+		p.second = createMax(M,exit_f);
+	}
+
+	void createCheckArrayBounds(llvm::Loop* L, llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr)
+	{
+		if(llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0)))
+		{
+			llvm::PointerType* _p = arr->getType();
+			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
+
+			auto getInstBeforeLoop = [](llvm::Loop* L)
+			{
+				for(llvm::Instruction& i : L->getLoopPreheader()->getInstList())
+				{
+					if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&i)) return op;
+				}
+			};
+
+			if(min && max)
+			{
+//				std::cerr << "Min and Max" << std::endl;
+				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::Value* args1[] = {min,builder.getInt32(0)};
+				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
+				builder.CreateCall(p.first,args1);
+				builder.CreateCall(p.second,args2);
+			}
+			else if(min && !max)
+			{
+//				std::cerr << "Only Min" << std::endl;
+				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::Value* args1[] = {min,builder.getInt32(0)};
+				builder.CreateCall(p.first,args1);
+
+				builder.SetInsertPoint(ptr);
+				llvm::Value* v = NULL;
+				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+				{
+					v = se->getOperand(0);
+				}
+				llvm::Value* args2[] = {v,builder.getInt32(a->getNumElements())};
+				builder.CreateCall(p.second,args2);
+			}
+			else if(!min && max)
+			{
+//				std::cerr << "Only Max" << std::endl;
+				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
+				builder.CreateCall(p.second,args2);
+
+				builder.SetInsertPoint(ptr);
+				llvm::Value* v = NULL;
+				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+				{
+					v = se->getOperand(0);
+				}
+				llvm::Value* args1[] = {v,builder.getInt32(0)};
+				builder.CreateCall(p.first,args1);
+
+			}
+			else if(!min && !max)
+			{
+//				std::cerr << "None" << std::endl;
+				if(1)
+				{
+					llvm::IRBuilder<> builder(ptr);
+					llvm::Value* v = NULL;
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					{
+						v = se->getOperand(0);
+					}
+					if(min)
+					{
+						llvm::Value* args[] = {v,builder.getInt32(0)};
+						builder.CreateCall(p.first,args);
+					}
+				}
+				if(1)
+				{
+					llvm::IRBuilder<> builder(ptr);
+					llvm::Value* v = NULL;
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					{
+						v = se->getOperand(0);
+					}
+
+					if(max)
+					{
+						llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
+						builder.CreateCall(p.second,args);
+					}
+				}
+			}
+
+		}
+	}
+
+	bool checkFunctionCreated = false;
+	bool printfFunctionCreated = false;
+
+	llvm::Function* printf_prototype(llvm::Module* M) {
+		llvm::FunctionType* printf_type =  llvm::TypeBuilder<int(char *, ...), false>::get(M->getContext());
+		llvm::Function* func = llvm::cast<llvm::Function>(M->getOrInsertFunction("printf", printf_type,  llvm::AttributeSet().addAttribute(M->getContext(), 1U, llvm::Attribute::NoAlias)));
+		return func;
+	}
+
 	struct MLD: llvm::LoopPass
 	{
 		static char ID;
@@ -263,6 +488,23 @@ namespace{
 
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
+
+			if(!printfFunctionCreated)
+			{
+				llvm::IRBuilder<> builder(L->getHeader());
+				msg = builder.CreateGlobalStringPtr("Monotonic loop detected!\n");
+				err_msg = builder.CreateGlobalStringPtr("Assertion failed!\n");
+				printf_function = printf_prototype(L->getHeader()->getParent()->getParent());
+				printfFunctionCreated = true;
+			}
+
+			if(!checkFunctionCreated)
+			{
+				llvm::Function* exit_f = exit_prototype(L->getHeader()->getModule());
+				checkArrayPrototype(L->getHeader()->getModule(),exit_f);
+				checkFunctionCreated = true;
+			}
+
 			llvm::PHINode* phi = getLoopVar(L);
 			llvm::ICmpInst* cmp = getLoopCondition(L);
 			Direction loopDir = getDirection(phi);
@@ -274,6 +516,9 @@ namespace{
 			llvm::LLVMContext& C = llvm::getGlobalContext();
 			llvm::MDNode* MTN = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonicity"));
 
+			llvm::Value* min = getMin(isInstruction(phi));
+			llvm::Value* max = getMax(isInstruction(phi),isInstruction(cmp));
+
 			for(llvm::BasicBlock* bb : blocks)
 			{
 				for(llvm::Instruction& I : *bb)
@@ -282,26 +527,34 @@ namespace{
 					{
 						auto idx = isInstruction(ge->getOperand(2));
 						idx = isInstruction(idx->getOperand(0));
+
 						if(getDirection(phi,idx) == loopDir)
 						{
 							if(auto st = getStore(L,ge))
 							{
 								if(getDirection(phi,isInstruction(st->getOperand(0))) != loopDir)
 								{
+									st->setMetadata("monotonic.unsafe",MTN);
+									ge->setMetadata("monotonic.unsafe",MTN);
 									continue;
 								}
 								st->setMetadata("monotonic.safe",MTN);
 								isInstruction(st->getOperand(0))->setMetadata("monotonic.safe",MTN);
 							}
+
 							ge->setMetadata("monotonic.safe",MTN);
+							createCheckArrayBounds(L,min,max,ge);
 							if(auto ld = getLoad(L,ge)) ld->setMetadata("monotonic.safe",MTN);
 						}
+
 					}
 				}
 			}
 
 			return true;
 		}
+
+
 	};
 }
 

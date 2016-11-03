@@ -1,12 +1,11 @@
-
-int main(int argc, char* argv[])
+void function()
 {
-	int a[100];
-	for (int i = 1;i < 100; i--)
-	{
-		if(i < 25) a[i] = i+1;
-		else a[125-i] = 3;
-	}
-
-	return 0;
+        int a[] = {1,2,3,4,5,6,7};
+        int b[] = {1,2,3,4,5,6,7};
+        for (int i = 10;i > 3; i++)
+        {
+                a[i] = b[i+1] + 1;
+        }
 }
+
+
