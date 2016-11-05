@@ -398,10 +398,39 @@ namespace{
 		p.second = createMax(M,exit_f);
 	}
 
+	bool checkFunctionCreated = false;
+	bool printfFunctionCreated = false;
+
+	llvm::Function* printf_prototype(llvm::Module* M) {
+		llvm::FunctionType* printf_type =  llvm::TypeBuilder<int(char *, ...), false>::get(M->getContext());
+		llvm::Function* func = llvm::cast<llvm::Function>(M->getOrInsertFunction("printf", printf_type,  llvm::AttributeSet().addAttribute(M->getContext(), 1U, llvm::Attribute::NoAlias)));
+		return func;
+	}
+
+
 	void createCheckArrayBounds(llvm::Loop* L, llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr)
 	{
+
 		if(llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0)))
 		{
+
+			if(!printfFunctionCreated)
+			{
+				llvm::IRBuilder<> builder(L->getHeader());
+				msg = builder.CreateGlobalStringPtr("Monotonic loop detected!\n");
+				err_msg = builder.CreateGlobalStringPtr("Assertion failed!\n");
+				printf_function = printf_prototype(L->getHeader()->getParent()->getParent());
+				printfFunctionCreated = true;
+			}
+
+			if(!checkFunctionCreated)
+			{
+				llvm::Function* exit_f = exit_prototype(L->getHeader()->getModule());
+				checkArrayPrototype(L->getHeader()->getModule(),exit_f);
+				checkFunctionCreated = true;
+			}
+
+
 			llvm::PointerType* _p = arr->getType();
 			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
 
@@ -515,14 +544,6 @@ namespace{
 		}
 	}
 
-	bool checkFunctionCreated = false;
-	bool printfFunctionCreated = false;
-
-	llvm::Function* printf_prototype(llvm::Module* M) {
-		llvm::FunctionType* printf_type =  llvm::TypeBuilder<int(char *, ...), false>::get(M->getContext());
-		llvm::Function* func = llvm::cast<llvm::Function>(M->getOrInsertFunction("printf", printf_type,  llvm::AttributeSet().addAttribute(M->getContext(), 1U, llvm::Attribute::NoAlias)));
-		return func;
-	}
 
 	struct MLD: llvm::LoopPass
 	{
@@ -534,21 +555,6 @@ namespace{
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
 
-			if(!printfFunctionCreated)
-			{
-				llvm::IRBuilder<> builder(L->getHeader());
-				msg = builder.CreateGlobalStringPtr("Monotonic loop detected!\n");
-				err_msg = builder.CreateGlobalStringPtr("Assertion failed!\n");
-				printf_function = printf_prototype(L->getHeader()->getParent()->getParent());
-				printfFunctionCreated = true;
-			}
-
-			if(!checkFunctionCreated)
-			{
-				llvm::Function* exit_f = exit_prototype(L->getHeader()->getModule());
-				checkArrayPrototype(L->getHeader()->getModule(),exit_f);
-				checkFunctionCreated = true;
-			}
 
 			llvm::PHINode* phi = getLoopVar(L);
 			llvm::ICmpInst* cmp = getLoopCondition(L);
