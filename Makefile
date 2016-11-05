@@ -1,9 +1,14 @@
 all:
 	@if ! grep -q "add_subdirectory(MLD)" llvm/lib/Transforms/CMakeLists.txt; then echo "add_subdirectory(MLD)" >> llvm/lib/Transforms/CMakeLists.txt; fi
+
+	@rm -rf llvm/lib/Transforms/MLD/
 	@mkdir -p llvm/lib/Transforms/MLD/
 	@cp src/* llvm/lib/Transforms/MLD/
+
+	@rm -rf llvm/test/MLD/
+	@cp -r test/MLD/ llvm/test/
 	@mkdir -p llvm/build
-	@cd llvm/build; make -j8
+	@cd llvm/build; make -j8;
 
 start_llvm:
 	@mkdir -p llvm/build
@@ -14,12 +19,9 @@ run:
 	@rm -rf test/*.ll*
 	@rm -rf test/*.o*
 
-	@echo "##############"
-	@echo "TEST @:"
-	@echo "##############"
+	@cd test/ && make
 
-	@cd test/; clang++ -O0 -w -c -emit-llvm test1.cpp -o result1.bc; opt -mem2reg < result1.bc | llvm-dis > result1.ll; clang++ -O0 -w -c -emit-llvm -Xclang -load -Xclang ../llvm/build/lib/MonotonicLoopDetection.so result1.ll; llvm-dis result1.bc -o result1.ll;
-
+	@cd llvm/test/MLD/; ../../build/bin/llvm-lit -v *.ll
 
 clean:
-	@rm -rf test/result*
+	@cd test/ && make clean
