@@ -5,6 +5,7 @@ all:
 	@mkdir -p llvm/lib/Transforms/MLD/
 	@cp src/* llvm/lib/Transforms/MLD/
 
+	@rm -rf llvm/test/MLD/
 	@cp -r test/MLD/ llvm/test/
 	@mkdir -p llvm/build
 	@cd llvm/build; make -j8;
@@ -20,7 +21,7 @@ run:
 
 	@cd test/ && make
 
-	@cd llvm/test/MLD/; ../../build/bin/llvm-lit -v test.ll
+	@cd llvm/test/MLD/; ../../build/bin/llvm-lit -v *.ll
 
 clean:
 	@cd test/ && make clean

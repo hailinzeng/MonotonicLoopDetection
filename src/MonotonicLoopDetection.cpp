@@ -77,49 +77,64 @@ namespace{
 
 	llvm::ConstantInt* isConstantInt(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::ConstantInt>(V);
 	}
 
 	llvm::Argument* isArgument(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::Argument>(V);
 	}
 
 	llvm::BinaryOperator* isBinaryOperator(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::BinaryOperator>(V);
 	}
 
 
 	llvm::Instruction* isInstruction(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::Instruction>(V);
 	}
 
 	llvm::PHINode* isPHI(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::PHINode>(V);
 	}
 
 
 	llvm::GetElementPtrInst* isGetElementPtrInst(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::GetElementPtrInst>(V);
 	}
 
 	llvm::ICmpInst* isICmpInst(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::ICmpInst>(V);
 	}
 
 	llvm::LoadInst* isLoadInst(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::LoadInst>(V);
 	}
 
 	llvm::SExtInst* isSExtInst(llvm::Value* V)
 	{
+		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::SExtInst>(V);
+	}
+
+	llvm::ZExtInst* isZExtInst(llvm::Value* V)
+	{
+		if(!V) return NULL;
+		return llvm::dyn_cast<llvm::ZExtInst>(V);
 	}
 
 	Direction getDirection(llvm::PHINode* phi)
@@ -170,6 +185,10 @@ namespace{
 		{
 			return getDirection(phi,isInstruction(sext->getOperand(0)));
 		}
+		else if(auto zext = isZExtInst(I))
+		{
+			return getDirection(phi,isInstruction(zext->getOperand(0)));
+		}
 		else{
 			return Direction::Unknown;
 		}
@@ -217,7 +236,9 @@ namespace{
 	llvm::BasicBlock* getLoopBody(llvm::Loop* L)
 	{
 	        for(llvm::Instruction& I : *L->getHeader())
-        	        if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&I)) return llvm::dyn_cast<llvm::BasicBlock>(op->getOperand(2));
+        	        if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&I))
+				if(op->getNumOperands() > 1) return llvm::dyn_cast<llvm::BasicBlock>(op->getOperand(2));
+				else return L->getHeader();
 		return NULL;
 	}
 
@@ -267,9 +288,10 @@ namespace{
 	}
 
 
+
 	llvm::Value* getMax(llvm::Instruction* phi, llvm::Instruction* cmp)
 	{
-		if((cmp && phi)&&(isICmpInst(cmp)))
+		if((cmp && phi) && isICmpInst(cmp))
 		{
 			if(cmp->getOperand(0)==phi) return cmp->getOperand(1);
 			else if(cmp->getOperand(1)==phi) return cmp->getOperand(0);
@@ -402,19 +424,25 @@ namespace{
 			}
 			else if(min && !max)
 			{
-//				std::cerr << "Only Min" << std::endl;
+				std::cerr << "Only Min" << std::endl;
 				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
 				llvm::Value* args1[] = {min,builder.getInt32(0)};
 				builder.CreateCall(p.first,args1);
 
-				builder.SetInsertPoint(ptr);
 				llvm::Value* v = NULL;
 				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 				{
+					builder.SetInsertPoint(se);
 					v = se->getOperand(0);
+				}
+				else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+				{
+					builder.SetInsertPoint(ze);
+					v = ze->getOperand(0);
 				}
 				llvm::Value* args2[] = {v,builder.getInt32(a->getNumElements())};
 				builder.CreateCall(p.second,args2);
+
 			}
 			else if(!min && max)
 			{
@@ -423,11 +451,16 @@ namespace{
 				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
 				builder.CreateCall(p.second,args2);
 
-				builder.SetInsertPoint(ptr);
 				llvm::Value* v = NULL;
 				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 				{
+					builder.SetInsertPoint(se);
 					v = se->getOperand(0);
+				}
+				else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+				{
+					builder.SetInsertPoint(ze);
+					v = ze->getOperand(0);
 				}
 				llvm::Value* args1[] = {v,builder.getInt32(0)};
 				builder.CreateCall(p.first,args1);
@@ -442,7 +475,13 @@ namespace{
 					llvm::Value* v = NULL;
 					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 					{
+						builder.SetInsertPoint(se);
 						v = se->getOperand(0);
+					}
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					{
+						builder.SetInsertPoint(ze);
+						v = ze->getOperand(0);
 					}
 					if(min)
 					{
@@ -456,7 +495,13 @@ namespace{
 					llvm::Value* v = NULL;
 					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 					{
+						builder.SetInsertPoint(se);
 						v = se->getOperand(0);
+					}
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					{
+						builder.SetInsertPoint(ze);
+						v = ze->getOperand(0);
 					}
 
 					if(max)
@@ -516,8 +561,8 @@ namespace{
 			llvm::LLVMContext& C = llvm::getGlobalContext();
 			llvm::MDNode* MTN = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonicity"));
 
-			llvm::Value* min = getMin(isInstruction(phi));
-			llvm::Value* max = getMax(isInstruction(phi),isInstruction(cmp));
+			llvm::Value* min = (loopDir == Direction::Increasing) ? getMin(isInstruction(phi)) : getMax(isInstruction(phi),isInstruction(cmp));
+			llvm::Value* max = (loopDir == Direction::Increasing) ? getMax(isInstruction(phi),isInstruction(cmp)) : getMin(isInstruction(phi));
 
 			for(llvm::BasicBlock* bb : blocks)
 			{
@@ -530,21 +575,27 @@ namespace{
 
 						if(getDirection(phi,idx) == loopDir)
 						{
+
 							if(auto st = getStore(L,ge))
 							{
 								if(getDirection(phi,isInstruction(st->getOperand(0))) != loopDir)
 								{
-									st->setMetadata("monotonic.unsafe",MTN);
-									ge->setMetadata("monotonic.unsafe",MTN);
+									st->setMetadata("not.monotonic",MTN);
+									ge->setMetadata("not.monotonic",MTN);
 									continue;
 								}
-								st->setMetadata("monotonic.safe",MTN);
+								st->setMetadata("is.monotonic",MTN);
 								isInstruction(st->getOperand(0))->setMetadata("monotonic.safe",MTN);
 							}
 
-							ge->setMetadata("monotonic.safe",MTN);
-							createCheckArrayBounds(L,min,max,ge);
+							ge->setMetadata("is.monotonic",MTN);
 							if(auto ld = getLoad(L,ge)) ld->setMetadata("monotonic.safe",MTN);
+
+							if(idx != phi)
+							{
+								createCheckArrayBounds(L,NULL,NULL,ge);
+							}
+							else createCheckArrayBounds(L,min,max,ge);
 						}
 
 					}
