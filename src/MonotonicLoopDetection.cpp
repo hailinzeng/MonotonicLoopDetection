@@ -11,9 +11,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/IR/Constants.h"
 
-#include <iostream> //debug
 #include <vector>
-//#include <utility>
 
 #include <llvm/IR/Argument.h>
 #include <llvm/IR/TypeBuilder.h>
@@ -289,23 +287,57 @@ namespace{
 
 
 
-	llvm::Value* getMax(llvm::Instruction* phi, llvm::Instruction* cmp)
+	llvm::Value* getMax(llvm::PHINode* phi, llvm::ICmpInst* cmp)
 	{
 		if((cmp && phi) && isICmpInst(cmp))
 		{
-			if(cmp->getOperand(0)==phi) return cmp->getOperand(1);
-			else if(cmp->getOperand(1)==phi) return cmp->getOperand(0);
+			Direction dir = getDirection(phi);
+			if(dir==Direction::Increasing)
+			{
+				if(cmp->getOperand(0)==phi)
+				{
+					llvm::IRBuilder<> builder(llvm::getGlobalContext());
+					if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULT) return builder.getInt32(*(isConstantInt(cmp->getOperand(1))->getValue().getRawData())-1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLT) return builder.getInt32(*(isConstantInt(cmp->getOperand(1))->getValue().getRawData())-1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULE) return cmp->getOperand(1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLE) return cmp->getOperand(1);
+				}
+				else if(cmp->getOperand(1)==phi)
+				{
+					llvm::IRBuilder<> builder(llvm::getGlobalContext());
+					if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGT) return builder.getInt32(*(isConstantInt(cmp->getOperand(0))->getValue().getRawData())-1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGT) return builder.getInt32(*(isConstantInt(cmp->getOperand(0))->getValue().getRawData())-1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGE) return cmp->getOperand(0);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGE) return cmp->getOperand(0);
+				}
+			}
+			else if(dir == Direction::Decreasing)
+			{
+				if(cmp->getOperand(0)==phi)
+				{
+					llvm::IRBuilder<> builder(llvm::getGlobalContext());
+					if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGT) return builder.getInt32(*(isConstantInt(cmp->getOperand(1))->getValue().getRawData())+1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGT) return builder.getInt32(*(isConstantInt(cmp->getOperand(1))->getValue().getRawData())+1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGE) return cmp->getOperand(1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGE) return cmp->getOperand(1);
+				}
+				else if(cmp->getOperand(1)==phi)
+				{
+					llvm::IRBuilder<> builder(llvm::getGlobalContext());
+					if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULT) return builder.getInt32(*(isConstantInt(cmp->getOperand(0))->getValue().getRawData())+1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLT) return builder.getInt32(*(isConstantInt(cmp->getOperand(0))->getValue().getRawData())+1);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULE) return cmp->getOperand(0);
+					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLE) return cmp->getOperand(0);
+				}
+			}
 		}
 		return NULL;
 	}
 
-	llvm::Value* getMin(llvm::Instruction* phi)
+	llvm::Value* getMin(llvm::PHINode* phi)
 	{
-		if(llvm::dyn_cast<llvm::PHINode>(phi))
-		{
-			return phi->getOperand(0);
-		}
-		return NULL;
+		if(!phi) return NULL;
+		return phi->getOperand(0);
 	}
 
 
@@ -447,15 +479,21 @@ namespace{
 //				std::cerr << "Min and Max" << std::endl;
 				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
 				llvm::Value* args1[] = {min,builder.getInt32(0)};
+
 				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
+				args1[0] = isConstantInt(args1[0]) ? builder.getInt32(*(isConstantInt(args1[0])->getValue().getRawData())) : args1[0];
+				args2[0] = isConstantInt(args2[0]) ? builder.getInt32(*(isConstantInt(args2[0])->getValue().getRawData())) : args2[0];
+
 				builder.CreateCall(p.first,args1);
 				builder.CreateCall(p.second,args2);
 			}
 			else if(min && !max)
 			{
-				std::cerr << "Only Min" << std::endl;
+//				std::cerr << "Only Min" << std::endl;
 				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
 				llvm::Value* args1[] = {min,builder.getInt32(0)};
+				args1[0] = isConstantInt(args1[0]) ? builder.getInt32(*(isConstantInt(args1[0])->getValue().getRawData())) : args1[0];
+
 				builder.CreateCall(p.first,args1);
 
 				llvm::Value* v = NULL;
@@ -470,6 +508,8 @@ namespace{
 					v = ze->getOperand(0);
 				}
 				llvm::Value* args2[] = {v,builder.getInt32(a->getNumElements())};
+				args2[0] = isConstantInt(args2[0]) ? builder.getInt32(*(isConstantInt(args2[0])->getValue().getRawData())) : args2[0];
+
 				builder.CreateCall(p.second,args2);
 
 			}
@@ -478,6 +518,8 @@ namespace{
 //				std::cerr << "Only Max" << std::endl;
 				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
 				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
+				args2[0] = isConstantInt(args2[0]) ? builder.getInt32(*(isConstantInt(args2[0])->getValue().getRawData())) : args2[0];
+
 				builder.CreateCall(p.second,args2);
 
 				llvm::Value* v = NULL;
@@ -492,6 +534,8 @@ namespace{
 					v = ze->getOperand(0);
 				}
 				llvm::Value* args1[] = {v,builder.getInt32(0)};
+				args1[0] = isConstantInt(args1[0]) ? builder.getInt32(*(isConstantInt(args1[0])->getValue().getRawData())) : args1[0];
+
 				builder.CreateCall(p.first,args1);
 
 			}
@@ -555,7 +599,6 @@ namespace{
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
 
-
 			llvm::PHINode* phi = getLoopVar(L);
 			llvm::ICmpInst* cmp = getLoopCondition(L);
 			Direction loopDir = getDirection(phi);
@@ -567,8 +610,8 @@ namespace{
 			llvm::LLVMContext& C = llvm::getGlobalContext();
 			llvm::MDNode* MTN = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonicity"));
 
-			llvm::Value* min = (loopDir == Direction::Increasing) ? getMin(isInstruction(phi)) : getMax(isInstruction(phi),isInstruction(cmp));
-			llvm::Value* max = (loopDir == Direction::Increasing) ? getMax(isInstruction(phi),isInstruction(cmp)) : getMin(isInstruction(phi));
+			llvm::Value* min = (loopDir == Direction::Increasing) ? getMin(phi) : getMax(phi,cmp);
+			llvm::Value* max = (loopDir == Direction::Increasing) ? getMax(phi,cmp) : getMin(phi);
 
 			for(llvm::BasicBlock* bb : blocks)
 			{
@@ -586,22 +629,31 @@ namespace{
 							{
 								if(getDirection(phi,isInstruction(st->getOperand(0))) != loopDir)
 								{
-									st->setMetadata("not.monotonic",MTN);
-									ge->setMetadata("not.monotonic",MTN);
+									st->setMetadata("not.monotonic.or.unknown",MTN);
+									ge->setMetadata("not.monotonic.or.unknown",MTN);
 									continue;
 								}
 								st->setMetadata("is.monotonic",MTN);
-								isInstruction(st->getOperand(0))->setMetadata("monotonic.safe",MTN);
 							}
 
 							ge->setMetadata("is.monotonic",MTN);
-							if(auto ld = getLoad(L,ge)) ld->setMetadata("monotonic.safe",MTN);
+							if(auto ld = getLoad(L,ge)) ld->setMetadata("is.monotonic",MTN);
+
+							if (!phi->getMetadata("not.monotonic.or.unknown")) phi->setMetadata("is.monotonic",MTN);
 
 							if(idx != phi)
 							{
 								createCheckArrayBounds(L,NULL,NULL,ge);
 							}
 							else createCheckArrayBounds(L,min,max,ge);
+						}
+						else{
+							if (llvm::MDNode* N = phi->getMetadata("is.monotonic"))
+							{
+								phi->setMetadata("is.monotonic",NULL);
+							}
+							phi->setMetadata("not.monotonic.or.unknown",MTN);
+							ge->setMetadata("not.monotonic.or.unknown",MTN);
 						}
 
 					}
