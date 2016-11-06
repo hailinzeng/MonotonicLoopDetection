@@ -11,6 +11,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/IR/Constants.h"
 
+#include <iostream>
 #include <vector>
 
 #include <llvm/IR/Argument.h>
@@ -515,7 +516,7 @@ namespace{
 			}
 			else if(!min && max)
 			{
-//				std::cerr << "Only Max" << std::endl;
+///				std::cerr << "Only Max" << std::endl;
 				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
 				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
 				args2[0] = isConstantInt(args2[0]) ? builder.getInt32(*(isConstantInt(args2[0])->getValue().getRawData())) : args2[0];
@@ -556,11 +557,8 @@ namespace{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
 					}
-					if(min)
-					{
-						llvm::Value* args[] = {v,builder.getInt32(0)};
-						builder.CreateCall(p.first,args);
-					}
+					llvm::Value* args[] = {v,builder.getInt32(0)};
+					builder.CreateCall(p.first,args);
 				}
 				if(1)
 				{
@@ -576,12 +574,8 @@ namespace{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
 					}
-
-					if(max)
-					{
-						llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
-						builder.CreateCall(p.second,args);
-					}
+					llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
+					builder.CreateCall(p.second,args);
 				}
 			}
 
