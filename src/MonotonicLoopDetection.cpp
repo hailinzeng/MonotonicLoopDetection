@@ -236,8 +236,10 @@ namespace{
 	{
 	        for(llvm::Instruction& I : *L->getHeader())
         	        if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&I))
+			{
 				if(op->getNumOperands() > 1) return llvm::dyn_cast<llvm::BasicBlock>(op->getOperand(2));
 				else return L->getHeader();
+			}
 		return NULL;
 	}
 
@@ -642,7 +644,7 @@ namespace{
 							else createCheckArrayBounds(L,min,max,ge);
 						}
 						else{
-							if (llvm::MDNode* N = phi->getMetadata("is.monotonic"))
+							if (phi->getMetadata("is.monotonic"))
 							{
 								phi->setMetadata("is.monotonic",NULL);
 							}
