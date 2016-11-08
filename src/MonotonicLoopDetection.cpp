@@ -443,7 +443,7 @@ namespace{
 	}
 
 
-	void createCheckArrayBounds(llvm::Loop* L, llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr)
+	void createCheckArrayBounds(llvm::Loop* L, llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr, bool complex=false, llvm::PHINode* phi=NULL)
 	{
 
 		if(llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0)))
@@ -476,6 +476,76 @@ namespace{
 					if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&i)) return op;
 				}
 			};
+
+			if(complex)
+			{
+				if(1)
+				{
+					llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+					llvm::Value* v = NULL;
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					{
+						builder.SetInsertPoint(se);
+						v = se->getOperand(0);
+					}
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					{
+						builder.SetInsertPoint(ze);
+						v = ze->getOperand(0);
+					}
+					auto cloneI = isInstruction(v)->clone();
+					for(unsigned int i = 0; i < cloneI->getNumOperands(); i++)
+					{
+						if(cloneI->getOperand(i)==phi) cloneI->setOperand(i,min);
+					}
+					cloneI->insertBefore(getInstBeforeLoop(L));
+					builder.SetInsertPoint(getInstBeforeLoop(L));
+					llvm::Value* args[] = {cloneI,builder.getInt32(0)};
+					builder.CreateCall(p.first,args);
+				}
+				if(max)
+				{
+					llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+					llvm::Value* v = NULL;
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					{
+						builder.SetInsertPoint(se);
+						v = se->getOperand(0);
+					}
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					{
+						builder.SetInsertPoint(ze);
+						v = ze->getOperand(0);
+					}
+					auto cloneI = isInstruction(v)->clone();
+					for(unsigned int i = 0; i < cloneI->getNumOperands(); i++)
+					{
+						if(cloneI->getOperand(i)==phi) cloneI->setOperand(i,max);
+					}
+					cloneI->insertBefore(getInstBeforeLoop(L));
+					builder.SetInsertPoint(getInstBeforeLoop(L));
+					llvm::Value* args[] = {cloneI, builder.getInt32(a->getNumElements())};
+					builder.CreateCall(p.second,args);
+				}
+				else
+				{
+					llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+					llvm::Value* v = NULL;
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					{
+						builder.SetInsertPoint(se);
+						v = se->getOperand(0);
+					}
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					{
+						builder.SetInsertPoint(ze);
+						v = ze->getOperand(0);
+					}
+					llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
+					builder.CreateCall(p.second,args);
+				}
+				return;
+			}
 
 			if(min && max)
 			{
@@ -639,7 +709,7 @@ namespace{
 
 							if(idx != phi)
 							{
-								createCheckArrayBounds(L,NULL,NULL,ge);
+								createCheckArrayBounds(L,min,max,ge,true,phi);
 							}
 							else createCheckArrayBounds(L,min,max,ge);
 						}

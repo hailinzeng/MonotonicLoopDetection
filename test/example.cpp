@@ -1,11 +1,10 @@
-void function()
+int main()
 {
-    int arr[100];
-    for (int i = 0 ; i < 15; i++) {        
-       arr[i+1] = i + 3;
-    }
-
-
+	int arr[100];
+	for (int i = 0 ; ; i++) {
+        	arr[i*2] = i;
+	}
+	return 0;
 }
 
 
