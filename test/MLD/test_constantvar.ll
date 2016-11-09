@@ -7,6 +7,7 @@
 ; CHECK-LABEL: entry:
 ; CHECK: call i1 @__check_array_min(
 ; CHECK-NEXT: call i1 @__check_array_max(
+; CHECK-NEXT: call i32 (i8*, ...) @printf(
 ; CHECK-NEXT: br label
 
 ; Function definition test

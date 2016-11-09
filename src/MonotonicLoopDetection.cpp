@@ -458,6 +458,15 @@ namespace{
 		return func;
 	}
 
+	llvm::Instruction* getInstBeforeLoop(llvm::Loop* L)
+	{
+		for(llvm::Instruction& i : L->getLoopPreheader()->getInstList())
+		{
+			if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&i)) return op;
+		}
+		return NULL;
+	}
+
 
 	void createCheckArrayBounds(llvm::Loop* L, llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr, bool complex=false, llvm::PHINode* phi=NULL)
 	{
@@ -484,14 +493,6 @@ namespace{
 
 			llvm::PointerType* _p = arr->getType();
 			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
-
-			auto getInstBeforeLoop = [](llvm::Loop* L)
-			{
-				for(llvm::Instruction& i : L->getLoopPreheader()->getInstList())
-				{
-					if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&i)) return op;
-				}
-			};
 
 
 			std::function<void (llvm::Instruction*,llvm::PHINode*,llvm::Value*)> insertAndReplace = [&](llvm::Instruction* I, llvm::PHINode* phi, llvm::Value* V)
@@ -751,6 +752,14 @@ namespace{
 					}
 				}
 			}
+
+			if (phi->getMetadata("is.monotonic"))
+			{
+				llvm::IRBuilder<> builder(llvm::getGlobalContext());
+				builder.SetInsertPoint(getInstBeforeLoop(L));
+				builder.CreateCall(printf_function, msg);
+			}
+
 
 			return true;
 		}
