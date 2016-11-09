@@ -5,8 +5,10 @@ all:
 	@mkdir -p llvm/lib/Transforms/MLD/
 	@cp src/* llvm/lib/Transforms/MLD/
 
-	@rm -rf llvm/test/MLD/
-	@cp -r test/MLD/ llvm/test/
+#By now we are doing everything related to MLD test in run
+#	@rm -rf llvm/test/MLD/
+#	@cp -r test/MLD/ llvm/test/
+
 	@mkdir -p llvm/build
 	@cd llvm/build; make -j8;
 
@@ -15,13 +17,11 @@ start_llvm:
 	@cd llvm/build; cmake ..; make -j8; make;
 
 run:
-	@rm -rf test/*.bc*
-	@rm -rf test/*.ll*
-	@rm -rf test/*.o*
 
-	@cd test/ && make
+	@rm -rf llvm/test/MLD/*
+	@cp test/*.cpp llvm/test/MLD/.
+	@cd llvm/test; ../build/bin/llvm-lit -sv MLD/*.cpp
 
-	@cd llvm/test/MLD/; ../../build/bin/llvm-lit -v *.ll
 
 clean:
 	@cd test/ && make clean
