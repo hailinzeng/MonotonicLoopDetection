@@ -13,12 +13,14 @@
 
 #include <iostream>
 #include <vector>
+#include <functional>
 
 #include <llvm/IR/Argument.h>
 #include <llvm/IR/TypeBuilder.h>
 #include <llvm/IR/Attributes.h>
 
 #include <llvm/IR/IRBuilder.h>
+
 
 namespace{
 
@@ -136,6 +138,19 @@ namespace{
 		return llvm::dyn_cast<llvm::ZExtInst>(V);
 	}
 
+	bool isSimpleExpression(llvm::Instruction* I, llvm::Value* V)
+	{
+		bool ret = true;
+		for(unsigned int i = 0; i < I->getNumOperands(); i++)
+		{
+			if(isConstantInt(I->getOperand(i))) continue;
+			else if(I->getOperand(i) == V) continue;
+			else if(auto binOp = isBinaryOperator(I->getOperand(i))) ret = ret && isSimpleExpression(binOp,V);
+			else return false;
+		}
+		return ret;
+	}
+
 	Direction getDirection(llvm::PHINode* phi)
 	{
 		if(phi->getNumOperands()==1) return getDirection(isPHI(phi->getOperand(0)));
@@ -229,6 +244,7 @@ namespace{
 			else if(dir1 == Direction::Decreasing && dir2 == Direction::Decreasing) return getDirection(phi);
 			return dir1 && dir2;
 		}
+
 		return Direction::Unknown;
 	}
 
@@ -477,8 +493,25 @@ namespace{
 				}
 			};
 
+
+			std::function<void (llvm::Instruction*,llvm::PHINode*,llvm::Value*)> insertAndReplace = [&](llvm::Instruction* I, llvm::PHINode* phi, llvm::Value* V)
+			{
+				for(unsigned int i = 0; i < I->getNumOperands(); i++)
+				{
+					if(I->getOperand(i)==phi) I->setOperand(i,V);
+					else if(auto cli = isInstruction(I->getOperand(i)))
+					{
+						cli = cli->clone();
+						I->setOperand(i,cli);
+						insertAndReplace(cli,phi,V);
+					}
+				}
+				I->insertBefore(getInstBeforeLoop(L));
+			};
+
 			if(complex)
 			{
+				llvm::Instruction* cloneI = NULL;
 				if(1)
 				{
 					llvm::IRBuilder<> builder(getInstBeforeLoop(L));
@@ -493,18 +526,18 @@ namespace{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
 					}
-					auto cloneI = isInstruction(v)->clone();
-					for(unsigned int i = 0; i < cloneI->getNumOperands(); i++)
-					{
-						if(cloneI->getOperand(i)==phi) cloneI->setOperand(i,min);
-					}
-					cloneI->insertBefore(getInstBeforeLoop(L));
+
+					cloneI = isInstruction(v)->clone();
+					insertAndReplace(cloneI,phi,min);
+
 					builder.SetInsertPoint(getInstBeforeLoop(L));
 					llvm::Value* args[] = {cloneI,builder.getInt32(0)};
 					builder.CreateCall(p.first,args);
+
 				}
 				if(max)
 				{
+
 					llvm::IRBuilder<> builder(getInstBeforeLoop(L));
 					llvm::Value* v = NULL;
 					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
@@ -517,12 +550,6 @@ namespace{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
 					}
-					auto cloneI = isInstruction(v)->clone();
-					for(unsigned int i = 0; i < cloneI->getNumOperands(); i++)
-					{
-						if(cloneI->getOperand(i)==phi) cloneI->setOperand(i,max);
-					}
-					cloneI->insertBefore(getInstBeforeLoop(L));
 					builder.SetInsertPoint(getInstBeforeLoop(L));
 					llvm::Value* args[] = {cloneI, builder.getInt32(a->getNumElements())};
 					builder.CreateCall(p.second,args);
@@ -690,7 +717,6 @@ namespace{
 
 						if(getDirection(phi,idx) == loopDir)
 						{
-
 							if(auto st = getStore(L,ge))
 							{
 								if(getDirection(phi,isInstruction(st->getOperand(0))) != loopDir)
