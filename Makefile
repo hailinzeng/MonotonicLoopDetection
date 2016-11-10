@@ -18,6 +18,7 @@ start_llvm:
 
 run:
 
+	@cp lit.cfg llvm/test/
 	@rm -rf llvm/test/MLD/*
 	@cp test/*.cpp llvm/test/MLD/.
 	@cd llvm/test; ../build/bin/llvm-lit -sv MLD/*.cpp
