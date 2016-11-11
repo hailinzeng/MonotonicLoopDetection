@@ -747,6 +747,8 @@ namespace{
 							}
 							phi->setMetadata("not.monotonic.or.unknown",MTN);
 							ge->setMetadata("not.monotonic.or.unknown",MTN);
+							createCheckArrayBounds(L,NULL,NULL,ge);
+
 						}
 
 					}
