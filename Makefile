@@ -10,17 +10,18 @@ all:
 #	@cp -r test/MLD/ llvm/test/
 
 	@mkdir -p llvm/build
-	@cd llvm/build; make -j8;
+	@cd llvm/build; make;
 
 start_llvm:
 	@mkdir -p llvm/build
-	@cd llvm/build; cmake ..; make -j8; make;
+	@cd llvm/build; cmake ..;
 
 run:
 
 	@cp lit.cfg llvm/test/
 	@rm -rf llvm/test/MLD/*
-	@cp test/*.cpp llvm/test/MLD/.
+	@mkdir -p llvm/test/MLD
+	@cp test/*.cpp llvm/test/MLD/
 	@cd llvm/test; ../build/bin/llvm-lit -sv MLD/*.cpp
 
 

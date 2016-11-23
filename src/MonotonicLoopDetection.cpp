@@ -251,11 +251,13 @@ namespace{
 	llvm::BasicBlock* getLoopBody(llvm::Loop* L)
 	{
 	        for(llvm::Instruction& I : *L->getHeader())
+		{
         	        if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&I))
 			{
 				if(op->getNumOperands() > 1) return llvm::dyn_cast<llvm::BasicBlock>(op->getOperand(2));
 				else return L->getHeader();
 			}
+		}
 		return NULL;
 	}
 
@@ -680,6 +682,20 @@ namespace{
 			}
 
 		}
+		else{
+			if(1)
+			{
+
+//				llvm::IRBuilder<> builder(ptr);
+//				llvm::Value* v = isInstruction(ptr->getOperand(0))->getOperand(0);
+//				builder.SetInsertPoint(isInstruction(ptr));
+//				builder.CreateSExt(v,llvm::Type::getInt32Ty(llvm::getGlobalContext()));
+//				llvm::Value* args[] = {v,builder.getInt32(0)};
+//				builder.CreateCall(p.first,args);
+
+			}
+
+		}
 	}
 
 
@@ -755,13 +771,25 @@ namespace{
 				}
 			}
 
-			if (phi->getMetadata("is.monotonic"))
+			if(phi->getMetadata("is.monotonic"))
 			{
 				llvm::IRBuilder<> builder(llvm::getGlobalContext());
 				builder.SetInsertPoint(getInstBeforeLoop(L));
 				builder.CreateCall(printf_function, msg);
 			}
-
+			else if(! (phi->getMetadata("not.monotonic.or.unknown")))
+			{
+				for(llvm::BasicBlock* b : L->blocks())
+				{
+					for(llvm::Instruction& i : *b)
+					{
+						if(llvm::GetElementPtrInst* ge = isGetElementPtrInst(&i))
+						{
+							createCheckArrayBounds(L,NULL,NULL,ge);
+						}
+					}
+				}
+			}
 
 			return true;
 		}

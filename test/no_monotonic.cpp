@@ -4,13 +4,13 @@
 
 // OOB test
 
-// CHECK-NOT: call i1 @__check_array_min(
-// CHECK-NOT: call i1 @__check_array_max(
+// CHECK: call i1 @__check_array_min(
+// CHECK: call i1 @__check_array_max(
 
 // Function definition test
-// CHECK-NOT: declare void @exit(i32)
-// CHECK-NOT: define i1 @__check_array_min(i32 %idx, i32 %mn)
-// CHECK-NOT: define i1 @__check_array_max(i32 %idx, i32 %mx)
+// CHECK: declare void @exit(i32)
+// CHECK: define i1 @__check_array_min(i32 %idx, i32 %mn)
+// CHECK: define i1 @__check_array_max(i32 %idx, i32 %mx)
 
 void function()
 {

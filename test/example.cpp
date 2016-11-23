@@ -7,6 +7,7 @@ int main()
 {
     int arr[100];
 
+
     //CHECK: Monotonic loop detected
     for (int i = 0 ; i < 15; i++) { 
        arr[i] = i+1;
