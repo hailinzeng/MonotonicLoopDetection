@@ -10,7 +10,7 @@ all:
 #	@cp -r test/MLD/ llvm/test/
 
 	@mkdir -p llvm/build
-	@cd llvm/build; make;
+	@cd llvm/build; cmake ..; make -j2;
 
 start_llvm:
 	@mkdir -p llvm/build
