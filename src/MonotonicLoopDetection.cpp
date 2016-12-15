@@ -52,6 +52,11 @@ namespace{
 	}
 
 
+	/*
+		Description: Returns the pointer to llvm::Loop's PHINode
+		Params:      Target loop
+		Return:      Null if could not find PHINode
+	*/
 	llvm::PHINode* getLoopVar(llvm::Loop* L)
 	{
 		for(llvm::Instruction& I : *L->getHeader())
@@ -67,6 +72,11 @@ namespace{
 		return NULL;
 	}
 
+	/*
+		Description: Returns the pointer to PHINode's condition
+		Params:      Target loop
+		Return:      Null if could not find ICmpInst
+	*/
 	llvm::ICmpInst* getLoopCondition(llvm::Loop* L)
 	{
 		for(llvm::Instruction& I : *L->getHeader())
@@ -76,18 +86,34 @@ namespace{
 		return NULL;
 	}
 
+
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::ConstantInt* isConstantInt(llvm::Value* V)
 	{
 		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::ConstantInt>(V);
 	}
 
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::Argument* isArgument(llvm::Value* V)
 	{
 		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::Argument>(V);
 	}
 
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::BinaryOperator* isBinaryOperator(llvm::Value* V)
 	{
 		if(!V) return NULL;
@@ -95,12 +121,22 @@ namespace{
 	}
 
 
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::Instruction* isInstruction(llvm::Value* V)
 	{
 		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::Instruction>(V);
 	}
 
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::PHINode* isPHI(llvm::Value* V)
 	{
 		if(!V) return NULL;
@@ -114,43 +150,56 @@ namespace{
 		return llvm::dyn_cast<llvm::GetElementPtrInst>(V);
 	}
 
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::ICmpInst* isICmpInst(llvm::Value* V)
 	{
 		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::ICmpInst>(V);
 	}
 
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::LoadInst* isLoadInst(llvm::Value* V)
 	{
 		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::LoadInst>(V);
 	}
 
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::SExtInst* isSExtInst(llvm::Value* V)
 	{
 		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::SExtInst>(V);
 	}
 
+	/*
+		Description: Verbose usage of llvm's cast/assertion
+		Params:      Target Value
+		Return:      Null if could not cast/assert
+	*/
 	llvm::ZExtInst* isZExtInst(llvm::Value* V)
 	{
 		if(!V) return NULL;
 		return llvm::dyn_cast<llvm::ZExtInst>(V);
 	}
 
-	bool isSimpleExpression(llvm::Instruction* I, llvm::Value* V)
-	{
-		bool ret = true;
-		for(unsigned int i = 0; i < I->getNumOperands(); i++)
-		{
-			if(isConstantInt(I->getOperand(i))) continue;
-			else if(I->getOperand(i) == V) continue;
-			else if(auto binOp = isBinaryOperator(I->getOperand(i))) ret = ret && isSimpleExpression(binOp,V);
-			else return false;
-		}
-		return ret;
-	}
 
+	/*
+		Description: Try detect the iteration direction (increases, descreases, invariant)
+		Params:      Target PHINode instruction
+		Return:      Direction (enum)
+	*/
 	Direction getDirection(llvm::PHINode* phi)
 	{
 		if(phi->getNumOperands()==1) return getDirection(isPHI(phi->getOperand(0)));
@@ -176,6 +225,11 @@ namespace{
 	}
 
 
+	/*
+		Description: Try detect the iteration direction (increases, descreases, invariant)
+		Params:      Provide base PHINode and target instruction
+		Return:      Direction (enum)
+	*/
 	Direction getDirection(llvm::PHINode* phi, llvm::Instruction* I)
 	{
 		if(auto p = isPHI(I)) return getDirection(p);
@@ -248,6 +302,11 @@ namespace{
 		return Direction::Unknown;
 	}
 
+	/*
+		Description: Return Loop's body
+		Params:      Target loop
+		Return:      Null if fail
+	*/
 	llvm::BasicBlock* getLoopBody(llvm::Loop* L)
 	{
 	        for(llvm::Instruction& I : *L->getHeader())
@@ -261,6 +320,11 @@ namespace{
 		return NULL;
 	}
 
+	/*
+		Description: Return all subblocks of the target block
+		Params:      Shared vector and target basic block
+		Return:      nothing
+	*/
 	void getBlocks(std::vector<llvm::BasicBlock*>& vec, llvm::BasicBlock* bb)
 	{
 		for(llvm::Instruction& I : *bb)
@@ -282,6 +346,11 @@ namespace{
 		}
 	}
 
+	/*
+		Description: Try find the Store Instruction of GetElementPtrInst
+		Params:      Loop and target GetElementPtrInst
+		Return:      Null if fail
+	*/
 	llvm::StoreInst* getStore(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
 	{
 		for(auto U : ptr->users())
@@ -294,6 +363,11 @@ namespace{
 		return NULL;
 	}
 
+	/*
+		Description: Try find the Load Instruction of GetElementPtrInst
+		Params:      Loop and target GetElementPtrInst
+		Return:      Null if fail
+	*/
 	llvm::LoadInst* getLoad(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
 	{
 		for(auto U : ptr->users())
@@ -307,7 +381,11 @@ namespace{
 	}
 
 
-
+	/*
+		Description: Try find the highest value of ICmpInst intruction
+		Params:      Base PHINode and target ICmpInst
+		Return:      Null if fail
+	*/
 	llvm::Value* getMax(llvm::PHINode* phi, llvm::ICmpInst* cmp)
 	{
 		if((cmp && phi) && isICmpInst(cmp))
@@ -355,6 +433,11 @@ namespace{
 		return NULL;
 	}
 
+	/*
+		Description: Try find the smallest value of ICmpInst intruction
+		Params:      Base PHINode and target ICmpInst
+		Return:      Null if fail
+	*/
 	llvm::Value* getMin(llvm::PHINode* phi)
 	{
 		if(!phi) return NULL;
@@ -362,6 +445,11 @@ namespace{
 	}
 
 
+	/*
+		Description: Create function header to call 'exit' function
+		Params:      Target Module
+		Return:      Null if fail
+	*/
 	llvm::Function* exit_prototype(llvm::Module* M)
 	{
 		llvm::LLVMContext& Ctx = M->getContext();
@@ -374,6 +462,11 @@ namespace{
 	llvm::Value* msg = NULL;
 	llvm::Value* err_msg = NULL;
 
+	/*
+		Description: Create __check_array_max function
+		Params:      Target Module and pointer to exit function
+		Return:      Null if fail
+	*/
 	llvm::Function* createMax(llvm::Module* M, llvm::Function* exit_f)
 	{
 		llvm::LLVMContext& Ctx = M->getContext();
@@ -409,6 +502,11 @@ namespace{
 	}
 
 
+	/*
+		Description: Create __check_array_min function
+		Params:      Target Module and pointer to exit function
+		Return:      Null if fail
+	*/
 	llvm::Function* createMin(llvm::Module* M, llvm::Function* exit_f)
 	{
 		llvm::LLVMContext& Ctx = M->getContext();
@@ -445,6 +543,11 @@ namespace{
 
 	std::pair<llvm::Function*,llvm::Function*> p;
 
+	/*
+		Description: Call createMin and createMax
+		Params:      Target Module and pointer to exit function
+		Return:      nothing
+	*/
 	void checkArrayPrototype(llvm::Module* M, llvm::Function* exit_f)
 	{
 		p.first = createMin(M,exit_f);
@@ -454,12 +557,22 @@ namespace{
 	bool checkFunctionCreated = false;
 	bool printfFunctionCreated = false;
 
+	/*
+		Description: Create function header to call 'printf' function
+		Params:      Target Module
+		Return:      Null if fail
+	*/
 	llvm::Function* printf_prototype(llvm::Module* M) {
 		llvm::FunctionType* printf_type =  llvm::TypeBuilder<int(char *, ...), false>::get(M->getContext());
 		llvm::Function* func = llvm::cast<llvm::Function>(M->getOrInsertFunction("printf", printf_type,  llvm::AttributeSet().addAttribute(M->getContext(), 1U, llvm::Attribute::NoAlias)));
 		return func;
 	}
 
+	/*
+		Description: Try get the last instruction of the previous BasicBlock
+		Params:      Target Loop
+		Return:      Null if fail
+	*/
 	llvm::Instruction* getInstBeforeLoop(llvm::Loop* L)
 	{
 		for(llvm::Instruction& i : L->getLoopPreheader()->getInstList())
@@ -470,6 +583,12 @@ namespace{
 	}
 
 
+	/*
+		Description: Create the call to __check_array_max and __check_array_min
+		Params:      Target Loop, Smallest and Highest value of PHINode interval, Address Intruction
+			     Complex is only true when the GetElementPtrInst doesn't have a direct reference to PHINode
+		Return:      Nothing
+	*/
 	void createCheckArrayBounds(llvm::Loop* L, llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr, bool complex=false, llvm::PHINode* phi=NULL)
 	{
 
@@ -699,6 +818,7 @@ namespace{
 	}
 
 
+	//MLD PASS
 	struct MLD: llvm::LoopPass
 	{
 		static char ID;
@@ -706,13 +826,18 @@ namespace{
 		MLD(): llvm::LoopPass(ID)
 		{}
 
+		//Loop Main Function
 		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
 		{
 
+			//try get iteration variable (PHINode)
 			llvm::PHINode* phi = getLoopVar(L);
+			//try get loop condition
 			llvm::ICmpInst* cmp = getLoopCondition(L);
+			//try get loop direction
 			Direction loopDir = getDirection(phi);
 
+			//get loop's blocks
 			std::vector<llvm::BasicBlock*> blocks;
 			blocks.push_back(getLoopBody(L));
 			getBlocks(blocks,getLoopBody(L));
@@ -720,7 +845,9 @@ namespace{
 			llvm::LLVMContext& C = llvm::getGlobalContext();
 			llvm::MDNode* MTN = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonicity"));
 
+			//try get smallest loop value
 			llvm::Value* min = (loopDir == Direction::Increasing) ? getMin(phi) : getMax(phi,cmp);
+			//trye get highest loop value
 			llvm::Value* max = (loopDir == Direction::Increasing) ? getMax(phi,cmp) : getMin(phi);
 
 			for(llvm::BasicBlock* bb : blocks)
@@ -729,9 +856,11 @@ namespace{
 				{
 					if(auto ge = isGetElementPtrInst(&I))
 					{
+						//go deep in GetElementPtrInst to check if the index variable is PHI
 						auto idx = isInstruction(ge->getOperand(2));
 						idx = isInstruction(idx->getOperand(0));
 
+						//check if index variable have the same direction of the loop
 						if(getDirection(phi,idx) == loopDir)
 						{
 							if(auto st = getStore(L,ge))
@@ -750,12 +879,14 @@ namespace{
 
 							if (!phi->getMetadata("not.monotonic.or.unknown")) phi->setMetadata("is.monotonic",MTN);
 
+							//check if index variable is different from PHI and then call complex version of 'createCheckArrayBounds'
 							if(idx != phi)
 							{
 								createCheckArrayBounds(L,min,max,ge,true,phi);
 							}
 							else createCheckArrayBounds(L,min,max,ge);
 						}
+						//index varaible doesn't have the same direction of the loop
 						else{
 							if (phi->getMetadata("is.monotonic"))
 							{
@@ -800,6 +931,7 @@ namespace{
 
 char MLD::ID=0;
 
+//Pass registration
 static void register_MLD_Pass(const llvm::PassManagerBuilder &, llvm::legacy::PassManagerBase &PM) {
 	PM.add(new MLD());
 }
