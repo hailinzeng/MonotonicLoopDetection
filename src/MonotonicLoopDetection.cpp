@@ -931,9 +931,12 @@ namespace{
 
 char MLD::ID=0;
 
-//Pass registration
+//static RegisterPass<MLD> X("mld", "Monotonic Loop Detection Pass", false, false);
+
+
 static void register_MLD_Pass(const llvm::PassManagerBuilder &, llvm::legacy::PassManagerBase &PM) {
 	PM.add(new MLD());
 }
 
 static llvm::RegisterStandardPasses RegisterMyPass(llvm::PassManagerBuilder::EP_EarlyAsPossible, register_MLD_Pass);
+

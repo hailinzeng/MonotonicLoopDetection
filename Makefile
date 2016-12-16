@@ -9,12 +9,13 @@ all:
 #	@rm -rf llvm/test/MLD/
 #	@cp -r test/MLD/ llvm/test/
 
-	@mkdir -p llvm/build
-	@cd llvm/build; cmake ..; make -j2;
+	@mkdir -p ./build
+	@cd ./build; cmake -G "Unix Makefiles" ../llvm; make -j2;
 
 start_llvm:
-	@mkdir -p llvm/build
-	@cd llvm/build; cmake ..;
+
+	@mkdir -p ./build
+	@cd ./build; cmake -G "Unix Makefiles" ../llvm;
 
 run:
 
@@ -22,7 +23,7 @@ run:
 	@rm -rf llvm/test/MLD/*
 	@mkdir -p llvm/test/MLD
 	@cp test/*.cpp llvm/test/MLD/
-	@cd llvm/test; ../build/bin/llvm-lit -sv MLD/*.cpp
+	@cd llvm/test; ../../build/bin/llvm-lit -sv MLD/*.cpp
 
 
 clean:
