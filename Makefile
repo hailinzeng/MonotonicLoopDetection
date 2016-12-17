@@ -1,16 +1,15 @@
 all:
-	@if ! grep -q "add_subdirectory(MLD)" llvm/lib/Transforms/CMakeLists.txt; then echo "add_subdirectory(MLD)" >> llvm/lib/Transforms/CMakeLists.txt; fi
 
-	@rm -rf llvm/lib/Transforms/MLD/
-	@mkdir -p llvm/lib/Transforms/MLD/
-	@cp src/* llvm/lib/Transforms/MLD/
+#	@if ! grep -q "add_subdirectory(MLD)" llvm/lib/Transforms/CMakeLists.txt; then echo "add_subdirectory(MLD)" >> llvm/lib/Transforms/CMakeLists.txt; fi
+#	@rm -rf llvm/lib/Transforms/MLD/
+#	@mkdir -p llvm/lib/Transforms/MLD/
+#	@cp src/* llvm/lib/Transforms/MLD/
 
 #By now we are doing everything related to MLD test in run
 #	@rm -rf llvm/test/MLD/
 #	@cp -r test/MLD/ llvm/test/
 
-	@mkdir -p ./build
-	@cd ./build; cmake -G "Unix Makefiles" ../llvm; make -j2;
+	@cd ./build; make;
 
 start_llvm:
 
