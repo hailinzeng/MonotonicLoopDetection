@@ -23,491 +23,69 @@
 #include "llvm/Transforms/Scalar.h"
 
 
-namespace{
+namespace {
 
-	enum Direction { Increasing, Decreasing, Invariant, Unknown };
+	#define IS_CONSTANTINT(V) llvm::dyn_cast<llvm::ConstantInt>(V)
+	#define IS_ARGUMENT(V) llvm::dyn_cast<llvm::Argument>(V)
+	#define IS_BINARYOPERATOR(V) llvm::dyn_cast<llvm::BinaryOperator>(V)
+	#define IS_INSTRUCTION(V) llvm::dyn_cast<llvm::Instruction>(V)
+	#define IS_PHINODE(V) llvm::dyn_cast<llvm::PHINode>(V)
+	#define IS_GETELEMENTPTRINST(V) llvm::dyn_cast<llvm::GetElementPtrInst>(V)
+	#define IS_ICMPINST(V) llvm::dyn_cast<llvm::ICmpInst>(V)
+	#define IS_LOADINST(V) llvm::dyn_cast<llvm::LoadInst>(V)
+	#define IS_SEXTINST(V) llvm::dyn_cast<llvm::SExtInst>(V)
+	#define IS_ZEXTINST(V) llvm::dyn_cast<llvm::ZExtInst>(V)
 
-	Direction operator!(const Direction& d)
-	{
-		if(d==Direction::Increasing) return Direction::Decreasing;
-		else if(d==Direction::Decreasing) return Direction::Increasing;
-		return d;
-	}
+        enum Direction { Increasing, Decreasing, Invariant, Unknown };
 
-	Direction operator&&(const Direction& ld, const Direction& rd)
-	{
-		if(ld == Direction::Unknown || rd == Direction::Unknown) return Direction::Unknown;
-		else if(ld == Direction::Invariant && rd == Direction::Invariant) return Direction::Invariant;
-		else if(ld == rd) return ld;
-		else if(ld == Direction::Invariant) return rd;
-		else if(rd == Direction::Invariant) return ld;
-		return Direction::Unknown;
-	}
+        Direction operator!(const Direction& d)
+        {
+                if(d==Direction::Increasing) return Direction::Decreasing;
+                else if(d==Direction::Decreasing) return Direction::Increasing;
+                return d;
+        }
 
-	std::ostream& operator<<(std::ostream& os, const Direction& dir) {
-		if(dir==Direction::Increasing) os << "Increasing";
-		else if(dir==Direction::Decreasing) os << "Decreasing";
-		else if(dir==Direction::Invariant) os << "Invariant";
-		else os << "Unknown";
-		return os;
-	}
-
-
-	/*
-		Description: Returns the pointer to llvm::Loop's PHINode
-		Params:      Target loop
-		Return:      Null if could not find PHINode
-	*/
-	llvm::PHINode* getLoopVar(llvm::Loop* L)
-	{
-		for(llvm::Instruction& I : *L->getHeader())
-		{
-                       	if(I.getOpcode()==llvm::Instruction::PHI)
-                        {
-	                      	for(llvm::Instruction& i : *L->getLoopLatch())
-                                {
-        	                     	if(&i==I.getOperand(1)) return llvm::dyn_cast<llvm::PHINode>(&I);
-                                }
-			}
-		}
-		return NULL;
-	}
-
-	/*
-		Description: Returns the pointer to PHINode's condition
-		Params:      Target loop
-		Return:      Null if could not find ICmpInst
-	*/
-	llvm::ICmpInst* getLoopCondition(llvm::Loop* L)
-	{
-		for(llvm::Instruction& I : *L->getHeader())
-		{
-                	if(llvm::dyn_cast<llvm::ICmpInst>(&I)) return llvm::dyn_cast<llvm::ICmpInst>(&I);
-		}
-		return NULL;
-	}
-
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::ConstantInt* isConstantInt(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::ConstantInt>(V);
-	}
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::Argument* isArgument(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::Argument>(V);
-	}
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::BinaryOperator* isBinaryOperator(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::BinaryOperator>(V);
-	}
-
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::Instruction* isInstruction(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::Instruction>(V);
-	}
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::PHINode* isPHI(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::PHINode>(V);
-	}
-
-
-	llvm::GetElementPtrInst* isGetElementPtrInst(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::GetElementPtrInst>(V);
-	}
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::ICmpInst* isICmpInst(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::ICmpInst>(V);
-	}
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::LoadInst* isLoadInst(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::LoadInst>(V);
-	}
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::SExtInst* isSExtInst(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::SExtInst>(V);
-	}
-
-	/*
-		Description: Verbose usage of llvm's cast/assertion
-		Params:      Target Value
-		Return:      Null if could not cast/assert
-	*/
-	llvm::ZExtInst* isZExtInst(llvm::Value* V)
-	{
-		if(!V) return NULL;
-		return llvm::dyn_cast<llvm::ZExtInst>(V);
-	}
-
-
-	/*
-		Description: Try detect the iteration direction (increases, descreases, invariant)
-		Params:      Target PHINode instruction
-		Return:      Direction (enum)
-	*/
-	Direction getDirection(llvm::PHINode* phi)
-	{
-		if(phi->getNumOperands()==1) return getDirection(isPHI(phi->getOperand(0)));
-       	        if(llvm::Instruction* ii = llvm::dyn_cast<llvm::Instruction>(phi->getOperand(1)))
-                {
-               	        if(ii->getOpcode()==llvm::Instruction::Add)
-                       	{
-                               	if((ii->getOperand(0)==phi)&&(isConstantInt(ii->getOperand(1))))
-                                {
-                                       	if(isConstantInt(ii->getOperand(1))->getValue().isNegative()) return Direction::Decreasing;
-                                        else if(*(isConstantInt(ii->getOperand(1))->getValue().getRawData())>0) return Direction::Increasing;
-                                        else return Direction::Invariant;
-                                }
-                                else if((isConstantInt(ii->getOperand(0)))&&(ii->getOperand(1)==phi))
-                                {
-                                       	if(isConstantInt(ii->getOperand(0))->getValue().isNegative()) return Direction::Decreasing;
-                                        else if(*(isConstantInt(ii->getOperand(0))->getValue().getRawData())>0) return Direction::Increasing;
-                                        else return Direction::Invariant;
-                                }
-                         }
-                }
+        Direction operator&&(const Direction& ld, const Direction& rd)
+        {
+                if(ld == Direction::Unknown || rd == Direction::Unknown) return Direction::Unknown;
+                else if(ld == Direction::Invariant && rd == Direction::Invariant) return Direction::Invariant;
+                else if(ld == rd) return ld;
+                else if(ld == Direction::Invariant) return rd;
+                else if(rd == Direction::Invariant) return ld;
                 return Direction::Unknown;
-	}
+        }
+
+        std::ostream& operator<<(std::ostream& os, const Direction& dir) {
+                if(dir==Direction::Increasing) os << "Increasing";
+                else if(dir==Direction::Decreasing) os << "Decreasing";
+                else if(dir==Direction::Invariant) os << "Invariant";
+                else os << "Unknown";
+                return os;
+        }
 
 
-	/*
-		Description: Try detect the iteration direction (increases, descreases, invariant)
-		Params:      Provide base PHINode and target instruction
-		Return:      Direction (enum)
-	*/
-	Direction getDirection(llvm::PHINode* phi, llvm::Instruction* I)
-	{
-		if(auto p = isPHI(I)) return getDirection(p);
-		llvm::Value* op1;
-		llvm::Value* op2;
-		if(I==NULL) return Direction::Unknown;
-		else if(isBinaryOperator(I))
-		{
-			op1 = I->getOperand(0);
-			op2 = I->getOperand(1);
-		}
-		else if(auto ld = isLoadInst(I))
-		{
-			return getDirection(phi,isInstruction(ld->getOperand(0)));
-		}
-		else if(auto ge = isGetElementPtrInst(I))
-		{
-			return getDirection(phi,isInstruction(ge->getOperand(2)));
-		}
-		else if(auto sext = isSExtInst(I))
-		{
-			return getDirection(phi,isInstruction(sext->getOperand(0)));
-		}
-		else if(auto zext = isZExtInst(I))
-		{
-			return getDirection(phi,isInstruction(zext->getOperand(0)));
-		}
-		else{
-			return Direction::Unknown;
-		}
+        llvm::Function* printf_prototype(llvm::Module* M) {
+                llvm::FunctionType* printf_type =  llvm::TypeBuilder<int(char *, ...), false>::get(M->getContext());
+                llvm::Function* func = llvm::cast<llvm::Function>(M->getOrInsertFunction("printf", printf_type,  llvm::AttributeSet().addAttribute(M->getContext(), 1U, llvm::Attribute::NoAlias)));
+                return func;
+        }
 
-		Direction dir1, dir2;
-		if(isConstantInt(op1)) dir1 = Direction::Invariant;
-		else if(isArgument(op1)) dir1 = Direction::Unknown;
-		else if(isLoadInst(op1)) dir1 = getDirection(phi,isInstruction(op1));
-		else if(isPHI(op1)) dir1 = getDirection(isPHI(op1));
-		else if(isBinaryOperator(op1)) dir1 = getDirection(phi, isBinaryOperator(op1));
-
-		if(isConstantInt(op2)) dir2 = Direction::Invariant;
-		else if(isArgument(op2)) dir2 = Direction::Unknown;
-		else if(isLoadInst(op2)) dir2 = getDirection(phi,isInstruction(op2));
-		else if(isPHI(op2)) dir2 = getDirection(isPHI(op2));
-		else if(isBinaryOperator(op2)) dir2 = getDirection(phi, isBinaryOperator(op2));
-
-		if(I->getOpcode()==llvm::Instruction::Add)
-		{
-			return dir1 && dir2;
-		}
-		else if(I->getOpcode()==llvm::Instruction::Sub)
-		{
-			if(isConstantInt(op1)) return !dir2;
-			return dir1;
-		}
-		else if(I->getOpcode()==llvm::Instruction::Mul)
-		{
-			if(auto ci = isConstantInt(op1))
-			{
-				if(ci->getValue().isNegative()) return !dir2;
-			}
-			else if(auto ci = isConstantInt(op2))
-			{
-				if(ci->getValue().isNegative()) return !dir1;
-			}
-			else if(dir1 == Direction::Decreasing && dir2 != Direction::Decreasing) return !getDirection(phi);
-			else if(dir1 != Direction::Decreasing && dir2 == Direction::Decreasing) return !getDirection(phi);
-			else if(dir1 == Direction::Decreasing && dir2 == Direction::Decreasing) return getDirection(phi);
-			return dir1 && dir2;
-		}
-
-		return Direction::Unknown;
-	}
-
-	/*
-		Description: Return Loop's body
-		Params:      Target loop
-		Return:      Null if fail
-	*/
-	llvm::BasicBlock* getLoopBody(llvm::Loop* L)
-	{
-	        for(llvm::Instruction& I : *L->getHeader())
-		{
-        	        if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&I))
-			{
-				if(op->getNumOperands() > 1) return llvm::dyn_cast<llvm::BasicBlock>(op->getOperand(2));
-				else return L->getHeader();
-			}
-		}
-		return NULL;
-	}
-
-	/*
-		Description: Return all subblocks of the target block
-		Params:      Shared vector and target basic block
-		Return:      nothing
-	*/
-	void getBlocks(std::vector<llvm::BasicBlock*>& vec, llvm::BasicBlock* bb)
-	{
-		for(llvm::Instruction& I : *bb)
-		{
-			if(llvm::BranchInst* br = llvm::dyn_cast<llvm::BranchInst>(&I))
-			{
-				if(br->getNumOperands()>1)
-				{
-					for(unsigned int i = 0; i < br->getNumOperands(); i++)
-					{
-						if(llvm::BasicBlock* _bb = llvm::dyn_cast<llvm::BasicBlock>(br->getOperand(i)))
-						{
-							vec.push_back(_bb);
-							getBlocks(vec,_bb);
-						}
-					}
-				}
-			}
-		}
-	}
-
-	/*
-		Description: Try find the Store Instruction of GetElementPtrInst
-		Params:      Loop and target GetElementPtrInst
-		Return:      Null if fail
-	*/
-	llvm::StoreInst* getStore(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
-	{
-		for(auto U : ptr->users())
-		{
-			if (llvm::StoreInst* st = llvm::dyn_cast<llvm::StoreInst>(U))
-			{
-				if(L->contains(st)) return st;
-			}
-		}
-		return NULL;
-	}
-
-	/*
-		Description: Try find the Load Instruction of GetElementPtrInst
-		Params:      Loop and target GetElementPtrInst
-		Return:      Null if fail
-	*/
-	llvm::LoadInst* getLoad(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
-	{
-		for(auto U : ptr->users())
-		{
-			if (llvm::LoadInst* ld = llvm::dyn_cast<llvm::LoadInst>(U))
-			{
-				if(L->contains(ld)) return ld;
-			}
-		}
-		return NULL;
-	}
-
-
-	/*
-		Description: Try find the highest value of ICmpInst intruction
-		Params:      Base PHINode and target ICmpInst
-		Return:      Null if fail
-	*/
-	llvm::Value* getMax(llvm::PHINode* phi, llvm::ICmpInst* cmp)
-	{
-		if((cmp && phi) && isICmpInst(cmp))
-		{
-			Direction dir = getDirection(phi);
-			if(dir==Direction::Increasing)
-			{
-				if(cmp->getOperand(0)==phi)
-				{
-					llvm::IRBuilder<> builder(llvm::getGlobalContext());
-					if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULT) return builder.getInt32(*(isConstantInt(cmp->getOperand(1))->getValue().getRawData())-1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLT) return builder.getInt32(*(isConstantInt(cmp->getOperand(1))->getValue().getRawData())-1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULE) return cmp->getOperand(1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLE) return cmp->getOperand(1);
-				}
-				else if(cmp->getOperand(1)==phi)
-				{
-					llvm::IRBuilder<> builder(llvm::getGlobalContext());
-					if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGT) return builder.getInt32(*(isConstantInt(cmp->getOperand(0))->getValue().getRawData())-1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGT) return builder.getInt32(*(isConstantInt(cmp->getOperand(0))->getValue().getRawData())-1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGE) return cmp->getOperand(0);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGE) return cmp->getOperand(0);
-				}
-			}
-			else if(dir == Direction::Decreasing)
-			{
-				if(cmp->getOperand(0)==phi)
-				{
-					llvm::IRBuilder<> builder(llvm::getGlobalContext());
-					if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGT) return builder.getInt32(*(isConstantInt(cmp->getOperand(1))->getValue().getRawData())+1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGT) return builder.getInt32(*(isConstantInt(cmp->getOperand(1))->getValue().getRawData())+1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGE) return cmp->getOperand(1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGE) return cmp->getOperand(1);
-				}
-				else if(cmp->getOperand(1)==phi)
-				{
-					llvm::IRBuilder<> builder(llvm::getGlobalContext());
-					if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULT) return builder.getInt32(*(isConstantInt(cmp->getOperand(0))->getValue().getRawData())+1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLT) return builder.getInt32(*(isConstantInt(cmp->getOperand(0))->getValue().getRawData())+1);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULE) return cmp->getOperand(0);
-					else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLE) return cmp->getOperand(0);
-				}
-			}
-		}
-		return NULL;
-	}
-
-	/*
-		Description: Try find the smallest value of ICmpInst intruction
-		Params:      Base PHINode and target ICmpInst
-		Return:      Null if fail
-	*/
-	llvm::Value* getMin(llvm::PHINode* phi)
-	{
-		if(!phi) return NULL;
-		return phi->getOperand(0);
-	}
-
-
-	/*
-		Description: Create function header to call 'exit' function
-		Params:      Target Module
-		Return:      Null if fail
-	*/
-	llvm::Function* exit_prototype(llvm::Module* M)
-	{
-		llvm::LLVMContext& Ctx = M->getContext();
-		llvm::Constant* c = M->getOrInsertFunction("exit", llvm::Type::getVoidTy(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
-		llvm::Function* exit_f = llvm::cast<llvm::Function>(c);
-		return exit_f;
-	}
+        llvm::Function* exit_prototype(llvm::Module* M)
+        {
+                llvm::LLVMContext& Ctx = M->getContext();
+                llvm::Constant* c = M->getOrInsertFunction("exit", llvm::Type::getVoidTy(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
+                llvm::Function* exit_f = llvm::cast<llvm::Function>(c);
+                return exit_f;
+        }
 
 	llvm::Function* printf_function = NULL;
 	llvm::Value* msg = NULL;
 	llvm::Value* err_msg = NULL;
+	bool checkFunctionCreated = false;
+	bool printfFunctionCreated = false;
 
-	/*
-		Description: Create __check_array_max function
-		Params:      Target Module and pointer to exit function
-		Return:      Null if fail
-	*/
-	llvm::Function* createMax(llvm::Module* M, llvm::Function* exit_f)
-	{
-		llvm::LLVMContext& Ctx = M->getContext();
-		llvm::Constant* c = M->getOrInsertFunction("__check_array_max", llvm::Type::getInt1Ty(Ctx), llvm::Type::getInt32Ty(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
-		llvm::Function* max_f = llvm::cast<llvm::Function>(c);
+	std::pair<llvm::Function*,llvm::Function*> p;
 
-		llvm::Function::arg_iterator args = max_f->arg_begin();
-		llvm::Value* idx = &*args++;
-		idx->setName("idx");
-		llvm::Value* mx = &*args++;
-		mx->setName("mx");
-
-		llvm::BasicBlock* entry = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", max_f);
-		llvm::BasicBlock* ret = llvm::BasicBlock::Create(llvm::getGlobalContext(), "return", max_f);
-		llvm::BasicBlock* cond_false = llvm::BasicBlock::Create(llvm::getGlobalContext(), "cond_false", max_f);
-
-		llvm::IRBuilder<> builder(entry);
-
-		llvm::Value* less = builder.CreateICmpSLT(idx, mx, "tmp");
-
-		builder.CreateCondBr(less, ret, cond_false);
-		builder.SetInsertPoint(ret);
-		builder.CreateRet(less);
-		builder.SetInsertPoint(cond_false);
-
-		llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
-
-		builder.CreateCall(printf_function,err_msg);
-		builder.CreateCall(exit_f,errval);
-		builder.CreateRet(less);
-
-		return max_f;
-	}
-
-
-	/*
-		Description: Create __check_array_min function
-		Params:      Target Module and pointer to exit function
-		Return:      Null if fail
-	*/
 	llvm::Function* createMin(llvm::Module* M, llvm::Function* exit_f)
 	{
 		llvm::LLVMContext& Ctx = M->getContext();
@@ -542,59 +120,284 @@ namespace{
 		return min_f;
 	}
 
-	std::pair<llvm::Function*,llvm::Function*> p;
+	llvm::Function* createMax(llvm::Module* M, llvm::Function* exit_f)
+	{
+		llvm::LLVMContext& Ctx = M->getContext();
+		llvm::Constant* c = M->getOrInsertFunction("__check_array_max", llvm::Type::getInt1Ty(Ctx), llvm::Type::getInt32Ty(Ctx), llvm::Type::getInt32Ty(Ctx), NULL);
+		llvm::Function* max_f = llvm::cast<llvm::Function>(c);
 
-	/*
-		Description: Call createMin and createMax
-		Params:      Target Module and pointer to exit function
-		Return:      nothing
-	*/
+		llvm::Function::arg_iterator args = max_f->arg_begin();
+		llvm::Value* idx = &*args++;
+		idx->setName("idx");
+		llvm::Value* mx = &*args++;
+		mx->setName("mx");
+
+		llvm::BasicBlock* entry = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", max_f);
+		llvm::BasicBlock* ret = llvm::BasicBlock::Create(llvm::getGlobalContext(), "return", max_f);
+		llvm::BasicBlock* cond_false = llvm::BasicBlock::Create(llvm::getGlobalContext(), "cond_false", max_f);
+
+		llvm::IRBuilder<> builder(entry);
+
+		llvm::Value* less = builder.CreateICmpSLT(idx, mx, "tmp");
+
+		builder.CreateCondBr(less, ret, cond_false);
+		builder.SetInsertPoint(ret);
+		builder.CreateRet(less);
+		builder.SetInsertPoint(cond_false);
+
+		llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
+
+		builder.CreateCall(printf_function,err_msg);
+		builder.CreateCall(exit_f,errval);
+		builder.CreateRet(less);
+
+		return max_f;
+	}
+
 	void checkArrayPrototype(llvm::Module* M, llvm::Function* exit_f)
 	{
 		p.first = createMin(M,exit_f);
 		p.second = createMax(M,exit_f);
 	}
 
-	bool checkFunctionCreated = false;
-	bool printfFunctionCreated = false;
 
-	/*
-		Description: Create function header to call 'printf' function
-		Params:      Target Module
-		Return:      Null if fail
-	*/
-	llvm::Function* printf_prototype(llvm::Module* M) {
-		llvm::FunctionType* printf_type =  llvm::TypeBuilder<int(char *, ...), false>::get(M->getContext());
-		llvm::Function* func = llvm::cast<llvm::Function>(M->getOrInsertFunction("printf", printf_type,  llvm::AttributeSet().addAttribute(M->getContext(), 1U, llvm::Attribute::NoAlias)));
-		return func;
+        Direction getDirection(llvm::PHINode* phi)
+        {
+                if(phi->getNumOperands()==1) return getDirection(IS_PHINODE(phi->getOperand(0)));
+                if(llvm::Instruction* ii = llvm::dyn_cast<llvm::Instruction>(phi->getOperand(1)))
+                {
+                        if(ii->getOpcode()==llvm::Instruction::Add)
+                        {
+                                if((ii->getOperand(0)==phi)&&(IS_CONSTANTINT(ii->getOperand(1))))
+                                {
+                                        if(IS_CONSTANTINT(ii->getOperand(1))->getValue().isNegative()) return Direction::Decreasing;
+                                        else if(*(IS_CONSTANTINT(ii->getOperand(1))->getValue().getRawData())>0) return Direction::Increasing;
+                                        else return Direction::Invariant;
+                                }
+                                else if((IS_CONSTANTINT(ii->getOperand(0)))&&(ii->getOperand(1)==phi))
+                                {
+                                        if(IS_CONSTANTINT(ii->getOperand(0))->getValue().isNegative()) return Direction::Decreasing;
+                                        else if(*(IS_CONSTANTINT(ii->getOperand(0))->getValue().getRawData())>0) return Direction::Increasing;
+                                        else return Direction::Invariant;
+                                }
+                         }
+                }
+                return Direction::Unknown;
+        }
+
+	llvm::StoreInst* getStore(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
+	{
+		for(auto U : ptr->users())
+		{
+			if (llvm::StoreInst* st = llvm::dyn_cast<llvm::StoreInst>(U))
+			{
+				if(L->contains(st)) return st;
+			}
+		}
+		return NULL;
 	}
 
-	/*
-		Description: Try get the last instruction of the previous BasicBlock
-		Params:      Target Loop
-		Return:      Null if fail
-	*/
-	llvm::Instruction* getInstBeforeLoop(llvm::Loop* L)
+	llvm::LoadInst* getLoad(llvm::Loop* L, llvm::GetElementPtrInst* ptr)
 	{
-		for(llvm::Instruction& i : L->getLoopPreheader()->getInstList())
+		for(auto U : ptr->users())
 		{
-			if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&i)) return op;
+			if (llvm::LoadInst* ld = llvm::dyn_cast<llvm::LoadInst>(U))
+			{
+				if(L->contains(ld)) return ld;
+			}
 		}
 		return NULL;
 	}
 
 
-	/*
-		Description: Create the call to __check_array_max and __check_array_min
-		Params:      Target Loop, Smallest and Highest value of PHINode interval, Address Intruction
-			     Complex is only true when the GetElementPtrInst doesn't have a direct reference to PHINode
-		Return:      Nothing
-	*/
-	void createCheckArrayBounds(llvm::Loop* L, llvm::Value* min, llvm::Value* max, llvm::GetElementPtrInst* ptr, bool complex=false, llvm::PHINode* phi=NULL)
+	Direction getDirection(llvm::PHINode* phi, llvm::Instruction* I)
 	{
 
-		if(llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0)))
+		if(auto p = IS_PHINODE(I)) return getDirection(p);
+		llvm::Value* op1;
+		llvm::Value* op2;
+		if(I==NULL) return Direction::Unknown;
+		else if(IS_BINARYOPERATOR(I))
 		{
+			op1 = I->getOperand(0);
+			op2 = I->getOperand(1);
+		}
+		else if(auto ld = IS_LOADINST(I))
+		{
+			return getDirection(phi,IS_INSTRUCTION(ld->getOperand(0)));
+		}
+		else if(auto ge = IS_GETELEMENTPTRINST(I))
+		{
+			return getDirection(phi,IS_INSTRUCTION(ge->getOperand(ge->getNumOperands()-1)));
+		}
+		else if(auto sext = IS_SEXTINST(I))
+		{
+			return getDirection(phi,IS_INSTRUCTION(sext->getOperand(0)));
+		}
+		else if(auto zext = IS_ZEXTINST(I))
+		{
+			return getDirection(phi,IS_INSTRUCTION(zext->getOperand(0)));
+		}
+		else{
+			return Direction::Unknown;
+		}
+
+		Direction dir1, dir2;
+		if(IS_CONSTANTINT(op1)) dir1 = Direction::Invariant;
+		else if(IS_ARGUMENT(op1)) dir1 = Direction::Unknown;
+		else if(IS_LOADINST(op1)) dir1 = getDirection(phi,IS_INSTRUCTION(op1));
+		else if(IS_PHINODE(op1)) dir1 = getDirection(IS_PHINODE(op1));
+		else if(IS_BINARYOPERATOR(op1)) dir1 = getDirection(phi, IS_BINARYOPERATOR(op1));
+
+		if(IS_CONSTANTINT(op2)) dir2 = Direction::Invariant;
+		else if(IS_ARGUMENT(op2)) dir2 = Direction::Unknown;
+		else if(IS_LOADINST(op2)) dir2 = getDirection(phi,IS_INSTRUCTION(op2));
+		else if(IS_PHINODE(op2)) dir2 = getDirection(IS_PHINODE(op2));
+		else if(IS_BINARYOPERATOR(op2)) dir2 = getDirection(phi, IS_BINARYOPERATOR(op2));
+
+		if(I->getOpcode()==llvm::Instruction::Add)
+		{
+			return dir1 && dir2;
+		}
+		else if(I->getOpcode()==llvm::Instruction::Sub)
+		{
+			if(IS_CONSTANTINT(op1)) return !dir2;
+			return dir1;
+		}
+		else if(I->getOpcode()==llvm::Instruction::Mul)
+		{
+			if(auto ci = IS_CONSTANTINT(op1))
+			{
+				if(ci->getValue().isNegative()) return !dir2;
+			}
+			else if(auto ci = IS_CONSTANTINT(op2))
+			{
+				if(ci->getValue().isNegative()) return !dir1;
+			}
+			else if(dir1 == Direction::Decreasing && dir2 != Direction::Decreasing) return !getDirection(phi);
+			else if(dir1 != Direction::Decreasing && dir2 == Direction::Decreasing) return !getDirection(phi);
+			else if(dir1 == Direction::Decreasing && dir2 == Direction::Decreasing) return getDirection(phi);
+			return dir1 && dir2;
+		}
+
+		return Direction::Unknown;
+	}
+
+
+	class MLDLoop
+	{
+		private:
+			llvm::Loop* L = NULL;
+			llvm::PHINode* phi = NULL;
+			llvm::ICmpInst* condition = NULL;
+			Direction direction = Direction::Unknown;
+			llvm::Instruction* beforeLoop = NULL;
+			llvm::Value* min = NULL;
+			llvm::Value* max = NULL;
+
+			llvm::PHINode* getVar()
+			{
+		                for(llvm::Instruction& I : *L->getHeader())
+		                {
+		                        if(I.getOpcode()==llvm::Instruction::PHI)
+		                        {
+		                                for(llvm::Instruction& i : *L->getLoopLatch())
+		                                {
+		                                        if(&i==I.getOperand(1)) return llvm::dyn_cast<llvm::PHINode>(&I);
+		                                }
+		                        }
+		                }
+		                return NULL;
+			}
+
+			llvm::ICmpInst* getCondition()
+			{
+		                for(llvm::Instruction& I : *L->getHeader())
+		                {
+		                        if(llvm::dyn_cast<llvm::ICmpInst>(&I)) return llvm::dyn_cast<llvm::ICmpInst>(&I);
+		                }
+		                return NULL;
+			}
+
+		        llvm::Value* getMin(llvm::PHINode* phi)
+			{
+		                return phi->getOperand(0);
+		        }
+
+		        llvm::Value* getMax(llvm::PHINode* phi, llvm::ICmpInst* cmp)
+		        {
+		                if((cmp && phi) && IS_ICMPINST(cmp))
+		                {
+		                        Direction dir = getDirection(phi);
+		                        if(dir==Direction::Increasing)
+		                        {
+		                                if(cmp->getOperand(0)==phi)
+		                                {
+		                                        llvm::IRBuilder<> builder(llvm::getGlobalContext());
+		                                        if(IS_CONSTANTINT(cmp->getOperand(1)))
+		                                        {
+		                                                if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULT) return builder.getInt32(*(IS_CONSTANTINT(cmp->getOperand(1))->getValue().getRawData())-1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLT) return builder.getInt32(*(IS_CONSTANTINT(cmp->getOperand(1))->getValue().getRawData())-1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULE) return cmp->getOperand(1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLE) return cmp->getOperand(1);
+		                                        }
+                		                }
+		                                else if(cmp->getOperand(1)==phi)
+		                                {
+		                                        if(IS_CONSTANTINT(cmp->getOperand(0)))
+		                                        {
+                		                                llvm::IRBuilder<> builder(llvm::getGlobalContext());
+		                                                if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGT) return builder.getInt32(*(IS_CONSTANTINT(cmp->getOperand(0))->getValue().getRawData())-1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGT) return builder.getInt32(*(IS_CONSTANTINT(cmp->getOperand(0))->getValue().getRawData())-1);
+	                	                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGE) return cmp->getOperand(0);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGE) return cmp->getOperand(0);
+		                                        }
+		                                }
+		                        }
+		                        else if(dir == Direction::Decreasing)
+		                        {
+                		                if(cmp->getOperand(0)==phi)
+		                                {
+		                                        if(IS_CONSTANTINT(cmp->getOperand(1)))
+		                                        {
+		                                                llvm::IRBuilder<> builder(llvm::getGlobalContext());
+		                                                if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGT) return builder.getInt32(*(IS_CONSTANTINT(cmp->getOperand(1))->getValue().getRawData())+1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGT) return builder.getInt32(*(IS_CONSTANTINT(cmp->getOperand(1))->getValue().getRawData())+1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_UGE) return cmp->getOperand(1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SGE) return cmp->getOperand(1);
+		                                        }
+		                                }
+		                                else if(cmp->getOperand(1)==phi)
+		                                {
+		                                        if(IS_CONSTANTINT(cmp->getOperand(0)))
+		                                        {
+		                                                llvm::IRBuilder<> builder(llvm::getGlobalContext());
+		                                                if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULT) return builder.getInt32(*(IS_CONSTANTINT(cmp->getOperand(0))->getValue().getRawData())+1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLT) return builder.getInt32(*(IS_CONSTANTINT(cmp->getOperand(0))->getValue().getRawData())+1);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_ULE) return cmp->getOperand(0);
+		                                                else if(cmp->getPredicate()==llvm::ICmpInst::ICMP_SLE) return cmp->getOperand(0);
+		                                        }
+		                                }
+		                        }
+		                }
+		                return NULL;
+		        }
+
+
+			llvm::Instruction* getInstBeforeLoop()
+			{
+				for(llvm::Instruction& i : L->getLoopPreheader()->getInstList())
+				{
+					if(llvm::BranchInst* op = llvm::dyn_cast<llvm::BranchInst>(&i)) return op;
+				}
+				return NULL;
+			}
+
+//----
+	void createCheckArrayBounds(llvm::GetElementPtrInst* ptr, llvm::Instruction* beforeLoop, bool complex=false, llvm::PHINode* phi=NULL)
+	{
+
+			llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0));
 
 			if(!printfFunctionCreated)
 			{
@@ -612,6 +415,35 @@ namespace{
 				checkFunctionCreated = true;
 			}
 
+			if(!arr)
+			{
+				if(IS_ARGUMENT(ptr->getOperand(0)))
+				{
+					llvm::IRBuilder<> builder(ptr);
+					llvm::Value* v = NULL;
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
+					{
+						builder.SetInsertPoint(se);
+						v = se->getOperand(0);
+					}
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
+					{
+						builder.SetInsertPoint(ze);
+						v = ze->getOperand(0);
+					}
+					llvm::Value* args[] = {v,builder.getInt32(0)};
+					builder.CreateCall(p.first,args);
+					return;
+				}
+				else
+				{
+					std::cerr << "ERROR: Unknown behavior" << std::endl;
+					return;
+				}
+
+			}
+
+
 
 			llvm::PointerType* _p = arr->getType();
 			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
@@ -622,14 +454,14 @@ namespace{
 				for(unsigned int i = 0; i < I->getNumOperands(); i++)
 				{
 					if(I->getOperand(i)==phi) I->setOperand(i,V);
-					else if(auto cli = isInstruction(I->getOperand(i)))
+					else if(auto cli = IS_INSTRUCTION(I->getOperand(i)))
 					{
 						cli = cli->clone();
 						I->setOperand(i,cli);
 						insertAndReplace(cli,phi,V);
 					}
 				}
-				I->insertBefore(getInstBeforeLoop(L));
+				I->insertBefore(beforeLoop);
 			};
 
 			if(complex)
@@ -637,7 +469,7 @@ namespace{
 				llvm::Instruction* cloneI = NULL;
 				if(1)
 				{
-					llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+					llvm::IRBuilder<> builder(beforeLoop);
 					llvm::Value* v = NULL;
 					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 					{
@@ -650,10 +482,10 @@ namespace{
 						v = ze->getOperand(0);
 					}
 
-					cloneI = isInstruction(v)->clone();
+					cloneI = IS_INSTRUCTION(v)->clone();
 					insertAndReplace(cloneI,phi,min);
 
-					builder.SetInsertPoint(getInstBeforeLoop(L));
+					builder.SetInsertPoint(beforeLoop);
 					llvm::Value* args[] = {cloneI,builder.getInt32(0)};
 					builder.CreateCall(p.first,args);
 
@@ -661,7 +493,7 @@ namespace{
 				if(max)
 				{
 
-					llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+					llvm::IRBuilder<> builder(beforeLoop);
 					llvm::Value* v = NULL;
 					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 					{
@@ -673,13 +505,13 @@ namespace{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
 					}
-					builder.SetInsertPoint(getInstBeforeLoop(L));
+					builder.SetInsertPoint(beforeLoop);
 					llvm::Value* args[] = {cloneI, builder.getInt32(a->getNumElements())};
 					builder.CreateCall(p.second,args);
 				}
 				else
 				{
-					llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+					llvm::IRBuilder<> builder(beforeLoop);
 					llvm::Value* v = NULL;
 					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
 					{
@@ -700,12 +532,12 @@ namespace{
 			if(min && max)
 			{
 //				std::cerr << "Min and Max" << std::endl;
-				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::IRBuilder<> builder(beforeLoop);
 				llvm::Value* args1[] = {min,builder.getInt32(0)};
 
 				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
-				args1[0] = isConstantInt(args1[0]) ? builder.getInt32(*(isConstantInt(args1[0])->getValue().getRawData())) : args1[0];
-				args2[0] = isConstantInt(args2[0]) ? builder.getInt32(*(isConstantInt(args2[0])->getValue().getRawData())) : args2[0];
+				args1[0] = IS_CONSTANTINT(args1[0]) ? builder.getInt32(*(IS_CONSTANTINT(args1[0])->getValue().getRawData())) : args1[0];
+				args2[0] = IS_CONSTANTINT(args2[0]) ? builder.getInt32(*(IS_CONSTANTINT(args2[0])->getValue().getRawData())) : args2[0];
 
 				builder.CreateCall(p.first,args1);
 				builder.CreateCall(p.second,args2);
@@ -713,9 +545,9 @@ namespace{
 			else if(min && !max)
 			{
 //				std::cerr << "Only Min" << std::endl;
-				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::IRBuilder<> builder(beforeLoop);
 				llvm::Value* args1[] = {min,builder.getInt32(0)};
-				args1[0] = isConstantInt(args1[0]) ? builder.getInt32(*(isConstantInt(args1[0])->getValue().getRawData())) : args1[0];
+				args1[0] = IS_CONSTANTINT(args1[0]) ? builder.getInt32(*(IS_CONSTANTINT(args1[0])->getValue().getRawData())) : args1[0];
 
 				builder.CreateCall(p.first,args1);
 
@@ -731,7 +563,7 @@ namespace{
 					v = ze->getOperand(0);
 				}
 				llvm::Value* args2[] = {v,builder.getInt32(a->getNumElements())};
-				args2[0] = isConstantInt(args2[0]) ? builder.getInt32(*(isConstantInt(args2[0])->getValue().getRawData())) : args2[0];
+				args2[0] = IS_CONSTANTINT(args2[0]) ? builder.getInt32(*(IS_CONSTANTINT(args2[0])->getValue().getRawData())) : args2[0];
 
 				builder.CreateCall(p.second,args2);
 
@@ -739,9 +571,9 @@ namespace{
 			else if(!min && max)
 			{
 ///				std::cerr << "Only Max" << std::endl;
-				llvm::IRBuilder<> builder(getInstBeforeLoop(L));
+				llvm::IRBuilder<> builder(beforeLoop);
 				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
-				args2[0] = isConstantInt(args2[0]) ? builder.getInt32(*(isConstantInt(args2[0])->getValue().getRawData())) : args2[0];
+				args2[0] = IS_CONSTANTINT(args2[0]) ? builder.getInt32(*(IS_CONSTANTINT(args2[0])->getValue().getRawData())) : args2[0];
 
 				builder.CreateCall(p.second,args2);
 
@@ -757,7 +589,7 @@ namespace{
 					v = ze->getOperand(0);
 				}
 				llvm::Value* args1[] = {v,builder.getInt32(0)};
-				args1[0] = isConstantInt(args1[0]) ? builder.getInt32(*(isConstantInt(args1[0])->getValue().getRawData())) : args1[0];
+				args1[0] = IS_CONSTANTINT(args1[0]) ? builder.getInt32(*(IS_CONSTANTINT(args1[0])->getValue().getRawData())) : args1[0];
 
 				builder.CreateCall(p.first,args1);
 
@@ -801,133 +633,171 @@ namespace{
 				}
 			}
 
-		}
+
+/*
 		else{
 			if(1)
 			{
 
-//				llvm::IRBuilder<> builder(ptr);
-//				llvm::Value* v = isInstruction(ptr->getOperand(0))->getOperand(0);
-//				builder.SetInsertPoint(isInstruction(ptr));
-//				builder.CreateSExt(v,llvm::Type::getInt32Ty(llvm::getGlobalContext()));
-//				llvm::Value* args[] = {v,builder.getInt32(0)};
-//				builder.CreateCall(p.first,args);
+				llvm::IRBuilder<> builder(ptr);
+				llvm::Value* v = isInstruction(ptr->getOperand(0))->getOperand(0);
+				builder.SetInsertPoint(isInstruction(ptr));
+				builder.CreateSExt(v,llvm::Type::getInt32Ty(llvm::getGlobalContext()));
+				llvm::Value* args[] = {v,builder.getInt32(0)};
+				builder.CreateCall(p.first,args);
 
 			}
 
 		}
+*/
 	}
 
-
-	//MLD PASS
-	struct MLD: llvm::LoopPass
-	{
-		static char ID;
-
-		MLD(): llvm::LoopPass(ID)
-		{}
-
-		//Loop Main Function
-		virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
-		{
-
-			//try get iteration variable (PHINode)
-			llvm::PHINode* phi = getLoopVar(L);
-			//try get loop condition
-			llvm::ICmpInst* cmp = getLoopCondition(L);
-			//try get loop direction
-			Direction loopDir = getDirection(phi);
-
-			//get loop's blocks
-			std::vector<llvm::BasicBlock*> blocks;
-			blocks.push_back(getLoopBody(L));
-			getBlocks(blocks,getLoopBody(L));
-
-			llvm::LLVMContext& C = llvm::getGlobalContext();
-			llvm::MDNode* MTN = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonicity"));
-
-			//try get smallest loop value
-			llvm::Value* min = (loopDir == Direction::Increasing) ? getMin(phi) : getMax(phi,cmp);
-			//trye get highest loop value
-			llvm::Value* max = (loopDir == Direction::Increasing) ? getMax(phi,cmp) : getMin(phi);
-
-			for(llvm::BasicBlock* bb : blocks)
+//----
+		public:
+			bool operator()()
 			{
+				//valid loop
+				if(!L)
+				{
+					std::cerr << "ERROR: NULL Loop" << std::endl;
+					return true;
+				}
+				//valid phi var
+				if(!(phi = getVar()))
+				{
+					//std::cerr << "ERROR: Can't detect loop variable" << std::endl;
+					return true;
+				}
+				//check condition
+				if(!(condition = getCondition()))
+				{
+					std::cerr << "WARNING: Loop without condition" << std::endl;
+				}
+				//check phi direction
+				if((direction = getDirection(phi))==Direction::Unknown)
+				{
+					std::cerr << "WARNING: Loop direction is unknown" << std::endl;
+				}
+				if(!(beforeLoop = getInstBeforeLoop()))
+				{
+					std::cerr << "ERROR: Could not get instruction before the loop" << std::endl;
+					return true;
+				}
+
+				//create META
+	                        llvm::LLVMContext& C = llvm::getGlobalContext();
+        	                llvm::MDNode* MTN = llvm::MDNode::get(C, llvm::MDString::get(C, "monotonicity"));
+
+				//catch all Loop's blocks
+				auto blocks = L->getBlocks();
+
+	                        //try get smallest loop value
+	                        min = (direction == Direction::Increasing) ? getMin(phi) : getMax(phi,condition);
+	                        //trye get highest loop value
+	                        max = (direction == Direction::Increasing) ? getMax(phi,condition) : getMin(phi);
+
+
+				for(llvm::BasicBlock* bb : blocks)
 				for(llvm::Instruction& I : *bb)
 				{
-					if(auto ge = isGetElementPtrInst(&I))
+					if(llvm::GetElementPtrInst* ge = IS_GETELEMENTPTRINST(&I))
 					{
-						//go deep in GetElementPtrInst to check if the index variable is PHI
-						auto idx = isInstruction(ge->getOperand(2));
-						idx = isInstruction(idx->getOperand(0));
 
-						//check if index variable have the same direction of the loop
-						if(getDirection(phi,idx) == loopDir)
-						{
-							if(auto st = getStore(L,ge))
-							{
-								if(getDirection(phi,isInstruction(st->getOperand(0))) != loopDir)
-								{
-									st->setMetadata("not.monotonic.or.unknown",MTN);
-									ge->setMetadata("not.monotonic.or.unknown",MTN);
-									continue;
-								}
-								st->setMetadata("is.monotonic",MTN);
-							}
+						llvm::Instruction* idx = IS_INSTRUCTION(ge->getOperand(ge->getNumOperands()-1));
+						idx = IS_INSTRUCTION(idx->getOperand(0));
 
-							ge->setMetadata("is.monotonic",MTN);
-							if(auto ld = getLoad(L,ge)) ld->setMetadata("is.monotonic",MTN);
 
-							if (!phi->getMetadata("not.monotonic.or.unknown")) phi->setMetadata("is.monotonic",MTN);
+                                                //check if index variable have the same direction of the loop
+                                                if(getDirection(phi,idx) == direction)
+                                                {
+                                                        if(auto st = getStore(L,ge))
+                                                        {
+                                                                if(getDirection(phi,IS_INSTRUCTION(st->getOperand(0))) != direction)
+                                                                {
+                                                                        st->setMetadata("not.monotonic.or.unknown",MTN);
+                                                                        ge->setMetadata("not.monotonic.or.unknown",MTN);
+                                                                        continue;
+                                                                }
+                                                                st->setMetadata("is.monotonic",MTN);
+                                                        }
 
-							//check if index variable is different from PHI and then call complex version of 'createCheckArrayBounds'
-							if(idx != phi)
-							{
-								createCheckArrayBounds(L,min,max,ge,true,phi);
-							}
-							else createCheckArrayBounds(L,min,max,ge);
-						}
-						//index varaible doesn't have the same direction of the loop
+                                                        ge->setMetadata("is.monotonic",MTN);
+                                                        if(auto ld = getLoad(L,ge)) ld->setMetadata("is.monotonic",MTN);
+
+                                                        if (!phi->getMetadata("not.monotonic.or.unknown")) phi->setMetadata("is.monotonic",MTN);
+
+                                                        //check if index variable is different from PHI and then call complex version of 'createCheckArrayBounds'
+                                                        if(idx != phi)
+                                                        {
+                                                                createCheckArrayBounds(ge, beforeLoop,true,phi);
+                                                        }
+                                                        else createCheckArrayBounds(ge, beforeLoop);
+
+                                                }
+
 						else{
+
 							if (phi->getMetadata("is.monotonic"))
 							{
 								phi->setMetadata("is.monotonic",NULL);
 							}
 							phi->setMetadata("not.monotonic.or.unknown",MTN);
 							ge->setMetadata("not.monotonic.or.unknown",MTN);
-							createCheckArrayBounds(L,NULL,NULL,ge);
+							createCheckArrayBounds(ge, beforeLoop);
 
 						}
 
 					}
 				}
-			}
 
-			if(phi->getMetadata("is.monotonic"))
-			{
-				llvm::IRBuilder<> builder(llvm::getGlobalContext());
-				builder.SetInsertPoint(getInstBeforeLoop(L));
-				builder.CreateCall(printf_function, msg);
-			}
-			else if(! (phi->getMetadata("not.monotonic.or.unknown")))
-			{
-				for(llvm::BasicBlock* b : L->blocks())
+				if(phi->getMetadata("is.monotonic"))
 				{
-					for(llvm::Instruction& i : *b)
+					llvm::IRBuilder<> builder(llvm::getGlobalContext());
+					builder.SetInsertPoint(beforeLoop);
+					if(printf_function) builder.CreateCall(printf_function, msg);
+					else std::cerr << "ERROR: printf call was not created" << std::endl;
+				}
+				else if(! (phi->getMetadata("not.monotonic.or.unknown")))
+				{
+					for(llvm::BasicBlock* b : L->blocks())
 					{
-						if(llvm::GetElementPtrInst* ge = isGetElementPtrInst(&i))
+						for(llvm::Instruction& i : *b)
 						{
-							createCheckArrayBounds(L,NULL,NULL,ge);
+							if(llvm::GetElementPtrInst* ge = IS_GETELEMENTPTRINST(&i))
+							{
+								createCheckArrayBounds(ge, beforeLoop);
+							}
+
 						}
 					}
 				}
+
+
+				return false;
 			}
 
-			return true;
-		}
 
-
+			MLDLoop(llvm::Loop* l): L(l)
+			{}
 	};
+
+
+        //MLD PASS
+        struct MLD: llvm::LoopPass
+        {
+                static char ID;
+
+                MLD(): llvm::LoopPass(ID)
+                {}
+
+                //Loop Main Function
+                virtual bool runOnLoop(llvm::Loop* L, llvm::LPPassManager &LPM)
+                {
+			MLDLoop mld(L);
+			return !mld();
+		}
+	};
+
 }
 
 char MLD::ID=0;
@@ -935,18 +805,9 @@ char MLD::ID=0;
 
 // Public interface to the CFGSimplification pass
 llvm::Pass *llvm::createMLDPass() {
-	return new MLD();
+        return new MLD();
 }
 
 
 static llvm::RegisterPass<MLD> X("mld", "Monotonic Loop Detection Pass", false, false);
-/*
-
-static void register_MLD_Pass(const llvm::PassManagerBuilder &, llvm::legacy::PassManagerBase &PM) {
-	PM.add(new MLD());
-}
-
-static llvm::RegisterStandardPasses RegisterMyPass(llvm::PassManagerBuilder::EP_EarlyAsPossible, register_MLD_Pass);
-
-*/
 
