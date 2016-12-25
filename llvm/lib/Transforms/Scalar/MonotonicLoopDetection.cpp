@@ -28,7 +28,12 @@ namespace {
 	#define IS_CONSTANTINT(V) llvm::dyn_cast<llvm::ConstantInt>(V)
 	#define IS_ARGUMENT(V) llvm::dyn_cast<llvm::Argument>(V)
 	#define IS_BINARYOPERATOR(V) llvm::dyn_cast<llvm::BinaryOperator>(V)
-	#define IS_INSTRUCTION(V) llvm::dyn_cast<llvm::Instruction>(V)
+
+	inline llvm::Instruction* IS_INSTRUCTION(llvm::Value* V) {
+		if(V) return llvm::dyn_cast<llvm::Instruction>(V);
+		else std::cerr << "ERROR: Instruction at line " << __LINE__ << std::endl;
+		return NULL;
+	}
 	#define IS_PHINODE(V) llvm::dyn_cast<llvm::PHINode>(V)
 	#define IS_GETELEMENTPTRINST(V) llvm::dyn_cast<llvm::GetElementPtrInst>(V)
 	#define IS_ICMPINST(V) llvm::dyn_cast<llvm::ICmpInst>(V)
@@ -163,6 +168,7 @@ namespace {
 
         Direction getDirection(llvm::PHINode* phi)
         {
+		if(!phi) std::cerr << "ERROR: PHI CAN'T BE NULL" << std::endl;
                 if(phi->getNumOperands()==1) return getDirection(IS_PHINODE(phi->getOperand(0)));
                 if(llvm::Instruction* ii = llvm::dyn_cast<llvm::Instruction>(phi->getOperand(1)))
                 {
@@ -212,12 +218,11 @@ namespace {
 
 	Direction getDirection(llvm::PHINode* phi, llvm::Instruction* I)
 	{
-
+		if(I==NULL) return Direction::Unknown;
 		if(auto p = IS_PHINODE(I)) return getDirection(p);
 		llvm::Value* op1;
 		llvm::Value* op2;
-		if(I==NULL) return Direction::Unknown;
-		else if(IS_BINARYOPERATOR(I))
+		if(IS_BINARYOPERATOR(I))
 		{
 			op1 = I->getOperand(0);
 			op2 = I->getOperand(1);
@@ -396,7 +401,7 @@ namespace {
 //----
 	void createCheckArrayBounds(llvm::GetElementPtrInst* ptr, llvm::Instruction* beforeLoop, bool complex=false, llvm::PHINode* phi=NULL)
 	{
-
+			ptr->dump();
 			llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0));
 
 			if(!printfFunctionCreated)
@@ -417,34 +422,25 @@ namespace {
 
 			if(!arr)
 			{
-				if(IS_ARGUMENT(ptr->getOperand(0)))
+				llvm::IRBuilder<> builder(ptr);
+				llvm::Value* v = NULL;
+				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 				{
-					llvm::IRBuilder<> builder(ptr);
-					llvm::Value* v = NULL;
-					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
-					{
-						builder.SetInsertPoint(se);
-						v = se->getOperand(0);
-					}
-					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
-					{
-						builder.SetInsertPoint(ze);
-						v = ze->getOperand(0);
-					}
-					llvm::Value* args[] = {v,builder.getInt32(0)};
-					builder.CreateCall(p.first,args);
-					return;
+					builder.SetInsertPoint(se);
+					v = se->getOperand(0);
 				}
-				else
+				else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 				{
-					std::cerr << "ERROR: Unknown behavior" << std::endl;
-					return;
+					builder.SetInsertPoint(ze);
+					v = ze->getOperand(0);
 				}
-
+				llvm::Value* args[] = {v,builder.getInt32(0)};
+				builder.CreateCall(p.first,args);
+				return;
 			}
 
 
-
+			std::cerr << "hoy" << std::endl;
 			llvm::PointerType* _p = arr->getType();
 			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
 
@@ -704,12 +700,13 @@ namespace {
 					{
 
 						llvm::Instruction* idx = IS_INSTRUCTION(ge->getOperand(ge->getNumOperands()-1));
+						if(!idx) continue;
 						idx = IS_INSTRUCTION(idx->getOperand(0));
-
 
                                                 //check if index variable have the same direction of the loop
                                                 if(getDirection(phi,idx) == direction)
                                                 {
+
                                                         if(auto st = getStore(L,ge))
                                                         {
                                                                 if(getDirection(phi,IS_INSTRUCTION(st->getOperand(0))) != direction)
@@ -746,7 +743,6 @@ namespace {
 							createCheckArrayBounds(ge, beforeLoop);
 
 						}
-
 					}
 				}
 
@@ -765,13 +761,14 @@ namespace {
 						{
 							if(llvm::GetElementPtrInst* ge = IS_GETELEMENTPTRINST(&i))
 							{
+								llvm::Instruction* idx = IS_INSTRUCTION(ge->getOperand(ge->getNumOperands()-1));
+								if(!idx) continue;
 								createCheckArrayBounds(ge, beforeLoop);
 							}
 
 						}
 					}
 				}
-
 
 				return false;
 			}
