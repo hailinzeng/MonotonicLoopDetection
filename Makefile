@@ -14,7 +14,7 @@ all:
 start_llvm:
 
 	@mkdir -p ./build
-	@cd ./build; cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug ../llvm;
+	@cd ./build; cmake -G "Unix Makefiles" ../llvm;
 
 run:
 
