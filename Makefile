@@ -22,7 +22,8 @@ run:
 	@rm -rf llvm/test/MLD/*
 	@mkdir -p llvm/test/MLD
 	@cp test/*.cpp llvm/test/MLD/
-	@cd llvm/test; ../../build/bin/llvm-lit -sv MLD/*.cpp
+	@cp test/*.c llvm/test/MLD/
+	@cd llvm/test; ../../build/bin/llvm-lit -sv MLD/*.cpp MLD/*.c
 
 
 clean:
