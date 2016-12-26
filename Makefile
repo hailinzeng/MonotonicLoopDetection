@@ -14,7 +14,7 @@ all:
 start_llvm:
 
 	@mkdir -p ./build
-	@cd ./build; cmake -G "Unix Makefiles" ../llvm;
+	@cd ./build; cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug ../llvm;
 
 run:
 
@@ -22,7 +22,8 @@ run:
 	@rm -rf llvm/test/MLD/*
 	@mkdir -p llvm/test/MLD
 	@cp test/*.cpp llvm/test/MLD/
-	@cd llvm/test; ../../build/bin/llvm-lit -sv MLD/*.cpp
+	@cp test/*.c llvm/test/MLD/
+	@cd llvm/test; ../../build/bin/llvm-lit -sv MLD/*.cpp MLD/*.c
 
 
 clean:
