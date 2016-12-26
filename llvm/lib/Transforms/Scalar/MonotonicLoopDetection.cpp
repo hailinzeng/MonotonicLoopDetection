@@ -28,12 +28,7 @@ namespace {
 	#define IS_CONSTANTINT(V) llvm::dyn_cast<llvm::ConstantInt>(V)
 	#define IS_ARGUMENT(V) llvm::dyn_cast<llvm::Argument>(V)
 	#define IS_BINARYOPERATOR(V) llvm::dyn_cast<llvm::BinaryOperator>(V)
-
-	inline llvm::Instruction* IS_INSTRUCTION(llvm::Value* V) {
-		if(V) return llvm::dyn_cast<llvm::Instruction>(V);
-		else std::cerr << "ERROR: Instruction at line " << __LINE__ << std::endl;
-		return NULL;
-	}
+	#define IS_INSTRUCTION(V) llvm::dyn_cast<llvm::Instruction>(V)
 	#define IS_PHINODE(V) llvm::dyn_cast<llvm::PHINode>(V)
 	#define IS_GETELEMENTPTRINST(V) llvm::dyn_cast<llvm::GetElementPtrInst>(V)
 	#define IS_ICMPINST(V) llvm::dyn_cast<llvm::ICmpInst>(V)
@@ -401,7 +396,6 @@ namespace {
 //----
 	void createCheckArrayBounds(llvm::GetElementPtrInst* ptr, llvm::Instruction* beforeLoop, bool complex=false, llvm::PHINode* phi=NULL)
 	{
-			ptr->dump();
 			llvm::AllocaInst* arr = llvm::dyn_cast<llvm::AllocaInst>(ptr->getOperand(0));
 
 			if(!printfFunctionCreated)
@@ -420,7 +414,7 @@ namespace {
 				checkFunctionCreated = true;
 			}
 
-			if(!arr)
+			auto atNullArr = [&]()
 			{
 				llvm::IRBuilder<> builder(ptr);
 				llvm::Value* v = NULL;
@@ -437,12 +431,25 @@ namespace {
 				llvm::Value* args[] = {v,builder.getInt32(0)};
 				builder.CreateCall(p.first,args);
 				return;
+			};
+
+			if(!arr){
+				atNullArr();
+				return;
 			}
 
+                        llvm::PointerType* _p = arr->getType();
+                        llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
 
-			std::cerr << "hoy" << std::endl;
-			llvm::PointerType* _p = arr->getType();
-			llvm::ArrayType* a = llvm::dyn_cast<llvm::ArrayType>(_p->getElementType());
+
+                        std::function<llvm::Value* (llvm::IRBuilder<>&)> getNumElements = [&](llvm::IRBuilder<>& builder)
+                        {
+                                if(a) return llvm::dyn_cast<llvm::Value>(builder.getInt32(a->getNumElements()));
+                                else {
+					if(IS_CONSTANTINT(arr->getOperand(0))) return arr->getOperand(0);
+					else if(IS_INSTRUCTION(arr->getOperand(0))) return IS_INSTRUCTION(arr->getOperand(0))->getOperand(0);
+				}
+                        };
 
 
 			std::function<void (llvm::Instruction*,llvm::PHINode*,llvm::Value*)> insertAndReplace = [&](llvm::Instruction* I, llvm::PHINode* phi, llvm::Value* V)
@@ -467,12 +474,12 @@ namespace {
 				{
 					llvm::IRBuilder<> builder(beforeLoop);
 					llvm::Value* v = NULL;
-					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(se);
 						v = se->getOperand(0);
 					}
-					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
@@ -491,35 +498,35 @@ namespace {
 
 					llvm::IRBuilder<> builder(beforeLoop);
 					llvm::Value* v = NULL;
-					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(se);
 						v = se->getOperand(0);
 					}
-					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
 					}
 					builder.SetInsertPoint(beforeLoop);
-					llvm::Value* args[] = {cloneI, builder.getInt32(a->getNumElements())};
+					llvm::Value* args[] = {cloneI, getNumElements(builder)};
 					builder.CreateCall(p.second,args);
 				}
 				else
 				{
 					llvm::IRBuilder<> builder(beforeLoop);
 					llvm::Value* v = NULL;
-					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(se);
 						v = se->getOperand(0);
 					}
-					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
 					}
-					llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
+					llvm::Value* args[] = {v,getNumElements(builder)};
 					builder.CreateCall(p.second,args);
 				}
 				return;
@@ -531,7 +538,7 @@ namespace {
 				llvm::IRBuilder<> builder(beforeLoop);
 				llvm::Value* args1[] = {min,builder.getInt32(0)};
 
-				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
+				llvm::Value* args2[] = {max,getNumElements(builder)};
 				args1[0] = IS_CONSTANTINT(args1[0]) ? builder.getInt32(*(IS_CONSTANTINT(args1[0])->getValue().getRawData())) : args1[0];
 				args2[0] = IS_CONSTANTINT(args2[0]) ? builder.getInt32(*(IS_CONSTANTINT(args2[0])->getValue().getRawData())) : args2[0];
 
@@ -548,17 +555,17 @@ namespace {
 				builder.CreateCall(p.first,args1);
 
 				llvm::Value* v = NULL;
-				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 				{
 					builder.SetInsertPoint(se);
 					v = se->getOperand(0);
 				}
-				else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+				else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 				{
 					builder.SetInsertPoint(ze);
 					v = ze->getOperand(0);
 				}
-				llvm::Value* args2[] = {v,builder.getInt32(a->getNumElements())};
+				llvm::Value* args2[] = {v,getNumElements(builder)};
 				args2[0] = IS_CONSTANTINT(args2[0]) ? builder.getInt32(*(IS_CONSTANTINT(args2[0])->getValue().getRawData())) : args2[0];
 
 				builder.CreateCall(p.second,args2);
@@ -568,18 +575,18 @@ namespace {
 			{
 ///				std::cerr << "Only Max" << std::endl;
 				llvm::IRBuilder<> builder(beforeLoop);
-				llvm::Value* args2[] = {max,builder.getInt32(a->getNumElements())};
+				llvm::Value* args2[] = {max,getNumElements(builder)};
 				args2[0] = IS_CONSTANTINT(args2[0]) ? builder.getInt32(*(IS_CONSTANTINT(args2[0])->getValue().getRawData())) : args2[0];
 
 				builder.CreateCall(p.second,args2);
 
 				llvm::Value* v = NULL;
-				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+				if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 				{
 					builder.SetInsertPoint(se);
 					v = se->getOperand(0);
 				}
-				else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+				else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 				{
 					builder.SetInsertPoint(ze);
 					v = ze->getOperand(0);
@@ -597,12 +604,12 @@ namespace {
 				{
 					llvm::IRBuilder<> builder(ptr);
 					llvm::Value* v = NULL;
-					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(se);
 						v = se->getOperand(0);
 					}
-					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
@@ -614,17 +621,17 @@ namespace {
 				{
 					llvm::IRBuilder<> builder(ptr);
 					llvm::Value* v = NULL;
-					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(2)))
+					if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(se);
 						v = se->getOperand(0);
 					}
-					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(2)))
+					else if(llvm::ZExtInst* ze = llvm::dyn_cast<llvm::ZExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
 					{
 						builder.SetInsertPoint(ze);
 						v = ze->getOperand(0);
 					}
-					llvm::Value* args[] = {v,builder.getInt32(a->getNumElements())};
+					llvm::Value* args[] = {v,getNumElements(builder)};
 					builder.CreateCall(p.second,args);
 				}
 			}
@@ -658,6 +665,7 @@ namespace {
 					std::cerr << "ERROR: NULL Loop" << std::endl;
 					return true;
 				}
+
 				//valid phi var
 				if(!(phi = getVar()))
 				{

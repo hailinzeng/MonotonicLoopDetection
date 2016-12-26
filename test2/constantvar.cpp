@@ -2,11 +2,12 @@
 // RUN: %S/../../../build/bin/opt -instnamer -mem2reg -break-crit-edges %t1.bc -o %t1.bc
 // RUN: %S/../../../build/bin/opt -mld %t1.bc -o - | llvm-dis | FileCheck %s
 
-
 // OOB test
-
+// CHECK-LABEL: entry:
 // CHECK: call i1 @__check_array_min(
-// CHECK: call i1 @__check_array_max(
+// CHECK-NEXT: call i1 @__check_array_max(
+// CHECK-NEXT: call i32 (i8*, ...) @printf(
+// CHECK-NEXT: br label
 
 // Function definition test
 // CHECK: declare void @exit(i32)
@@ -18,10 +19,6 @@ void function()
 	int arr[100];
 	for(unsigned int i = 0; i < 10; i++)
 	{
-		arr[i] = 1 - i;
-	}
-
-	for (int i = 0 ; i < 50; i++) {
-	       arr[125 - i] = i;
+		arr[i] = i;
 	}
 }
