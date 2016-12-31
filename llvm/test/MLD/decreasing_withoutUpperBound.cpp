@@ -7,7 +7,7 @@
 
 // CHECK-LABEL: entry:
 // CHECK: call i1 @__check_array_max(
-// CHECK-NEXT: call i32 (i8*, ...) @printf(
+// CHECK-NEXT: call {{i[0-9]+}} (i8*, ...) @printf(
 // CHECK-NEXT: br label
 
 // CHECK-LABEL: for.cond:
@@ -15,9 +15,9 @@
 
 
 // Function definition test
-// CHECK: declare void @exit(i32)
-// CHECK: define i1 @__check_array_min(i32 %idx, i32 %mn)
-// CHECK: define i1 @__check_array_max(i32 %idx, i32 %mx)
+// CHECK: declare void @exit({{i[0-9]+}})
+// CHECK: define i1 @__check_array_min({{i[0-9]+}} %idx, {{i[0-9]+}} %mn)
+// CHECK: define i1 @__check_array_max({{i[0-9]+}} %idx, {{i[0-9]+}} %mx)
 
 void function()
 {
