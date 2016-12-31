@@ -414,9 +414,6 @@ namespace {
 
 	void createCheckArrayBounds(llvm::Loop* L, llvm::GetElementPtrInst* ptr, llvm::Instruction* beforeLoop, std::pair<llvm::Value*,llvm::Value*> range, bool complex=false, llvm::PHINode* phi=NULL)
 	{
-
-		std::cerr << "test" << std::endl;
-
                 if(!printfFunctionCreated)
                 {
 	                llvm::IRBuilder<> builder(L->getHeader());
@@ -439,10 +436,6 @@ namespace {
 
 		llvm::Value* min = range.first;
 		llvm::Value* max = range.second;
-
-
-		if(min) min->dump(); else std::cerr << "NO MIN" << std::endl;
-		if(max) max->dump(); else std::cerr << "NO MAX" << std::endl;
 
                 std::function<llvm::Value* (llvm::IRBuilder<>&)> getNumElements = [&](llvm::IRBuilder<>& builder)
                 {
@@ -470,7 +463,6 @@ namespace {
 
 		auto atNullArr = [&]()
 		{
-			std::cerr << "ELSE" << std::endl;
 			llvm::IRBuilder<> builder(ptr);
 			llvm::Value* v = NULL;
 			if(llvm::SExtInst* se = llvm::dyn_cast<llvm::SExtInst>(ptr->getOperand(ptr->getNumOperands()-1)))
@@ -504,8 +496,6 @@ namespace {
 		//when is required to clone instructions
 		if(complex)
 		{
-			std::cerr << "COMPLEX" << std::endl;
-
 	                llvm::Instruction* cloneI = NULL;
                         if(1)
                         {
@@ -562,7 +552,6 @@ namespace {
                                         v = ze->getOperand(0);
                                 }
 	                        else{
-					std::cerr << "holy" << std::endl;
         	                        llvm::Value* point;
 	                                point = ptr->getOperand(ptr->getNumOperands()-1);
 	                                if(!IS_INSTRUCTION(point)) return;
@@ -576,9 +565,6 @@ namespace {
                         }
                         return;
 		}
-
-		std::cerr << "ALLOCA" << std::endl;
-
 
 		if(alloca && (min && max))
 		{
