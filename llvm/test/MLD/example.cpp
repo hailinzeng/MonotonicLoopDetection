@@ -3,17 +3,27 @@
 // RUN: %S/../../../build/bin/opt -mld %t1.bc -o - | llvm-dis | FileCheck %s
 
 
-#include <stdio.h>
-int main()
+// Fist OOB test
+
+// CHECK-LABEL: entry:
+// CHECK: call i1 @__check_array_max(
+// CHECK-NEXT: call {{i[0-9]+}} (i8*, ...) @printf(
+// CHECK-NEXT: br label
+
+// CHECK-LABEL: for.cond:
+// CHECK: call i1 @__check_array_min(
+
+// Function definition test
+// CHECK: declare void @exit({{i[0-9]+}})
+// CHECK: define i1 @__check_array_min({{i[0-9]+}} %idx, {{i[0-9]+}} %mn)
+// CHECK: define i1 @__check_array_max({{i[0-9]+}} %idx, {{i[0-9]+}} %mx)
+
+void function()
 {
-    int arr[100];
-
-
-    //CHECK: Monotonic loop detected
-    for (int i = 0 ; i < 15; i++) { 
-       arr[i] = i+1;
-    }
-
-    return 0;
+        int a[100];
+        for (int i = 99; ; i--)
+        {
+                a[i] = i;
+        }
 }
 
