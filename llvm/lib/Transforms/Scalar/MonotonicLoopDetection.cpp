@@ -483,7 +483,7 @@ namespace {
 				builder.SetInsertPoint(ptr);
 				v = point;
 			}
-			v = builder.CreateZExt(v, GETINTTY(llvm::getGlobalContext()));
+			v = builder.CreateZExt(v, GETINTTY(v->getContext()));
 			llvm::Value* args[] = {v,CREATEINT(0)};
 			builder.CreateCall(p.first,args);
 			return;
@@ -514,8 +514,7 @@ namespace {
                                 cloneI = IS_INSTRUCTION(v)->clone();
                                 insertAndReplace(cloneI,phi,min);
                                 builder.SetInsertPoint(beforeLoop);
-                                llvm::Value* args[] = {builder.CreateZExt(cloneI, GETINTTY(llvm::getGlobalContext())),CREATEINT(0)};
-//                                llvm::Value* args[] = {cloneI,CREATEINT(0)};
+                                llvm::Value* args[] = {builder.CreateZExt(cloneI, GETINTTY(cloneI->getContext())),CREATEINT(0)};
                                 builder.CreateCall(p.first,args);
                         }
                         if(max)
@@ -533,7 +532,7 @@ namespace {
                                         v = ze->getOperand(0);
                                 }
                                 builder.SetInsertPoint(beforeLoop);
-                                llvm::Value* args[] = {builder.CreateZExt(cloneI, GETINTTY(llvm::getGlobalContext())),CREATEINT(0)};
+                                llvm::Value* args[] = {builder.CreateZExt(cloneI, GETINTTY(cloneI->getContext())),CREATEINT(0)};
 //                                llvm::Value* args[] = {cloneI, getNumElements(builder)};
                                 builder.CreateCall(p.second,args);
                         }
@@ -559,12 +558,13 @@ namespace {
 	                                v = point;
 	                        }
 
-				v = builder.CreateZExt(v, GETINTTY(llvm::getGlobalContext()));
+				v = builder.CreateZExt(v, GETINTTY(v->getContext()));
                               	llvm::Value* args[] = {v,getNumElements(builder)};
                                 builder.CreateCall(p.second,args);
                         }
                         return;
 		}
+
 
 		if(alloca && (min && max))
 		{
@@ -595,7 +595,7 @@ namespace {
                    	     builder.SetInsertPoint(ze);
                              v = ze->getOperand(0);
                         }
-			v = builder.CreateZExt(v, GETINTTY(llvm::getGlobalContext()));
+			v = builder.CreateZExt(v, GETINTTY(v->getContext()));
                         llvm::Value* args2[] = {v,getNumElements(builder)};
                         args2[0] = IS_CONSTANTINT(args2[0]) ? CREATEINT(*(IS_CONSTANTINT(args2[0])->getValue().getRawData())) : args2[0];
                         builder.CreateCall(p.second,args2);
@@ -617,7 +617,7 @@ namespace {
         	               builder.SetInsertPoint(ze);
                                v = ze->getOperand(0);
                        }
-			v = builder.CreateZExt(v, GETINTTY(llvm::getGlobalContext()));
+			v = builder.CreateZExt(v, GETINTTY(v->getContext()));
                        llvm::Value* args1[] = {v,CREATEINT(0)};
                        args1[0] = IS_CONSTANTINT(args1[0]) ? CREATEINT(*(IS_CONSTANTINT(args1[0])->getValue().getRawData())) : args1[0];
                        builder.CreateCall(p.first,args1);
@@ -638,7 +638,7 @@ namespace {
                              	        builder.SetInsertPoint(ze);
                                         v = ze->getOperand(0);
                                }
-				v = builder.CreateZExt(v, GETINTTY(llvm::getGlobalContext()));
+				v = builder.CreateZExt(v, GETINTTY(v->getContext()));
                                llvm::Value* args[] = {v, CREATEINT(0)};
                                builder.CreateCall(p.first,args);
                         }

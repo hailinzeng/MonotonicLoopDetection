@@ -76,6 +76,7 @@ private:
       CodeGenPasses->add(
           createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
     }
+
     return CodeGenPasses;
   }
 
@@ -85,6 +86,7 @@ private:
       PerModulePasses->add(
           createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
     }
+
     return PerModulePasses;
   }
 
@@ -329,6 +331,14 @@ void EmitAssemblyHelper::CreatePasses(FunctionInfoIndex *FunctionIndex) {
 
   legacy::PassManager *MPM = getPerModulePasses();
 
+  MPM->add(createLoopExtractorPass());
+  MPM->add(createInstructionNamerPass());
+  MPM->add(createPromoteMemoryToRegisterPass());
+  MPM->add(createBreakCriticalEdgesPass());
+  MPM->add(createMLDPass());
+
+
+
   // If we are performing a ThinLTO importing compile, invoke the LTO
   // pipeline and pass down the in-memory function index.
   if (FunctionIndex) {
@@ -403,6 +413,7 @@ void EmitAssemblyHelper::CreatePasses(FunctionInfoIndex *FunctionIndex) {
 
   // Set up the per-function pass manager.
   legacy::FunctionPassManager *FPM = getPerFunctionPasses();
+
   if (CodeGenOpts.VerifyModule)
     FPM->add(createVerifierPass());
   PMBuilder.populateFunctionPassManager(*FPM);
@@ -443,6 +454,7 @@ void EmitAssemblyHelper::CreatePasses(FunctionInfoIndex *FunctionIndex) {
 }
 
 TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
+
   // Create the TargetMachine for generating code.
   std::string Error;
   std::string Triple = TheModule->getTargetTriple();

@@ -52,6 +52,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Scalar.h"
 #include <algorithm>
 #include <memory>
 using namespace llvm;
@@ -583,6 +584,16 @@ int main(int argc, char **argv) {
       FPasses->run(F);
     FPasses->doFinalization();
   }
+
+  //MLD dependencies
+  Passes.add(createLoopExtractorPass());
+  Passes.add(createInstructionNamerPass());
+  Passes.add(createPromoteMemoryToRegisterPass());
+  Passes.add(createBreakCriticalEdgesPass());
+
+  //MLD
+  Passes.add(createMLDPass());
+
 
   // Check that the module is well formed on completion of optimization
   if (!NoVerify && !VerifyEach)
