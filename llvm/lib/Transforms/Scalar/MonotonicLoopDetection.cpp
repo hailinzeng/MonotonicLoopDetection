@@ -346,9 +346,9 @@ namespace {
 		builder.CreateRet(greater);
 		builder.SetInsertPoint(cond_false);
 
+                llvm::Value* errval = llvm::ConstantInt::get(llvm::Type::getInt32Ty(M->getContext()),-1);
 
-//		llvm::Value* errval = CREATEINT(-1);
-//		builder.CreateCall(exit_f,errval);
+		builder.CreateCall(exit_f, errval);
 		builder.CreateCall(printf_function,err_msg);
 		builder.CreateRet(greater);
 
@@ -701,7 +701,7 @@ namespace {
 	                                }
 	                                st->setMetadata("is.monotonic",MTN);
 				}
-				ge->setMetadata("is.monotonic",MTN);
+				if(!ge->getMetadata("not.monotonic.or.unknown")) ge->setMetadata("is.monotonic",MTN);
 				if(auto ld = getLoad(L,ge)) ld->setMetadata("is.monotonic",MTN);
 				if(!phi->getMetadata("not.monotonic.or.unknown")) phi->setMetadata("is.monotonic",MTN);
 
@@ -712,6 +712,7 @@ namespace {
 			{
 		                if (phi->getMetadata("is.monotonic")) phi->setMetadata("is.monotonic",NULL);
 	                        phi->setMetadata("not.monotonic.or.unknown",MTN);
+		                if (ge->getMetadata("is.monotonic")) ge->setMetadata("is.monotonic",NULL);
 	                        ge->setMetadata("not.monotonic.or.unknown",MTN);
 	                        createCheckArrayBounds(L, ge, beforeLoop, ranges);
 			}
@@ -723,6 +724,7 @@ namespace {
 	                builder.SetInsertPoint(beforeLoop);
 	                if(printf_function) builder.CreateCall(printf_function, msg);
 	                else std::cerr << "ERROR: printf call was not created" << std::endl;
+			++NumOfMLD;
 	        }
 	        else if(! (phi->getMetadata("not.monotonic.or.unknown")))
 	        {
