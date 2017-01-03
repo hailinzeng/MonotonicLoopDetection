@@ -1,8 +1,9 @@
 
 all:
 	@../build/bin/clang++ -w -O0 -c -emit-llvm example.cpp -o example.bc
-	@../build/bin/opt -loop-extract -instnamer -mem2reg -break-crit-edges example.bc -o example.bc
-	@../build/bin/opt -mld example.bc -o example.bc
+	@#../build/bin/opt -loop-extract -instnamer -mem2reg -break-crit-edges example.bc -o example.bc
+	@#../build/bin/opt -mld example.bc -o example.bc
+	@#../build/bin/opt example.bc -o example.bc
 	@../build/bin/llvm-dis example.bc
 
 clean:
